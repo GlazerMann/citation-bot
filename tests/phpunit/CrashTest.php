@@ -19,7 +19,7 @@ final class CrashTest extends testBaseClass {
       AdsAbsControl::big_back_on();
       AdsAbsControl::small_back_on();
       Zotero::unblock_zotero();
-         $response = query_adsabs("indentifier:1986Mercu..15R..92T");
+      $response = query_adsabs("identifier:" . urlencode('"' . "1986Mercu..15R..92T" . '"'));
      print_r($response);
       AdsAbsControl::small_give_up();
       AdsAbsControl::big_give_up();
