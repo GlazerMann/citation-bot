@@ -16,18 +16,17 @@ final class CrashTest extends testBaseClass {
       define("TRAVIS_PRINT", "YES");
       Zotero::create_ch_zotero();
       WikipediaBot::make_ch();
-      $page = new TestPage();
-      $page->get_text_from($bad_page);
       AdsAbsControl::big_back_on();
       AdsAbsControl::small_back_on();
       Zotero::unblock_zotero();
-      $page->expand_text();
+         $response = query_adsabs("indentifier:1986Mercu..15R..92T");
+     print_r($response);
       AdsAbsControl::small_give_up();
       AdsAbsControl::big_give_up();
       Zotero::block_zotero();
       $this->assertTrue(FALSE); // prevent us from git committing with a website included
     }
-    $this->assertTrue(TRUE);
+   $this->assertTrue(TRUE);
   }
 
 }
