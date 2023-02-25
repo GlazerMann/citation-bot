@@ -152,7 +152,7 @@ const CANONICAL_PUBLISHER_URLS = array ('elsevier.com', 'springer.com', 'science
 
 const PROXY_HOSTS_TO_ALWAYS_DROP = array('proxy.libraries', 'proxy.lib.', '.ezproxy.', '-ezproxy.', '/ezproxy.',
                                   '.serialssolutions.com', 'search.ebscohost.com', 'findarticles.com',
-                                  'journals.royalsociety.org'); // Drop these if there is a valid DOI
+                                  'journals.royalsociety.org', '.idm.oclc.org'); // Drop these if there is a valid DOI
 
 const PROXY_HOSTS_TO_DROP = array('proxy.libraries', 'proxy.lib.', '.ezproxy.', '-ezproxy.', '/ezproxy.',
                                   '.serialssolutions.com', '.ebscohost.com', 'linkinghub.elsevier.com',
@@ -393,6 +393,10 @@ const HOSTNAME_MAP  = array('public.ebookcentral.proquest.com' => '[[ProQuest]]'
 			    'pna.gov.ph' => 'Philippine News Agency',
 			    'pia.gov.ph' => 'Philippine Information Agency',
 			    'irishtimes.com' => '[[The Irish Times]]',
+			    'wikinews.org' => '[[Wikinews]]',
+			    'royal.uk' => 'The Royal Family',
+			    'cinemaexpress.com' => '[[Cinema Express]]',
+			    'sify.com' => '[[Sify]]',
                            ); // Be warned, some website host a seperate sunday edition, etc.  Be careful and when in doubt link to hostname
 
 const NO_DATE_WEBSITES = array('wikipedia.org', 'web.archive.org', 'perma-archives.org', 'webarchive.proni.gov.uk', 'perma.cc',
@@ -688,7 +692,7 @@ const NON_JOURNAL_WEBSITES = array('-news.co.uk/', '.ajc.com/', '.al.com/',
 	                  'republicworld.com/', 'reunion.com/', 'reuters.com/', 'rfa.org/',
 	                  'rferl.org/', 'rfi.fr/', 'ria.ru/', 'riaa.com/', 'rian.com.ua/',
 	                  'rian.ru/', 'riftherald.com/', 'rockpapershotgun.com/', 'rogueimc.org/',
-	                  'rollcall.com/', 'rollingstone.com/', 'rottentomatoes.com/',
+	                  'rollcall.com/', 'rollingstone.com/', 'rottentomatoes.com/', 'royal.uk/',
 	                  'routesonline.com/', 'rpgamer.com/', 'rpgfan.com/', 'rpgsite.net/',
 	                  'rsssf.com/', 'rt.com/', 'rugbyleagueproject.org/', 'russianships.info/',
 	                  'russiatoday.com/', 'sagehens.com/', 'saints.org.uk/', 'salon.com/',
@@ -800,13 +804,14 @@ const ARE_MAGAZINES = array('the new yorker', 'the new republic', 'new republic'
                            'nintendo power', 'playthings', 'entertainment weekly', 'official xbox magazine',
                            'electronic gaming monthly', 'official u.s. playstation magazine',
                            'playstation: the official magazine', 'play and silicon mag', 'games radar', 'hyper',
-                           'famitsu', 'gamepro', 'yachting world',
+                           'famitsu', 'gamepro', 'yachting world', 'kalki',
                            ); // lowercase axact matches
 const ARE_MANY_THINGS = array('pc gamer', 'gamestar', 'rock paper shotgun', 'mcv', 'rock, paper, shotgun', 'edge',
                               'ballotpedia', 'npr', 'ballotpedia.org', 'npr.org', 'nih.gov', 'nih', 'eurogamer.it',
-			      'conceptcarz',
+			      'conceptcarz', 'the royal family',
                               'national institutes of health', 'national institutes of health (nih)'); // lowercase axact matches.  These are things that are both websites and newspapers
-const ARE_NEWSPAPERS = array('the economist', 'la times', 'toronto sun', 'washington post', 'the washington post', 'philippine daily inquirer', 'the irish times'); // lowercase axact matches
+const ARE_NEWSPAPERS = array('the economist', 'la times', 'toronto sun', 'washington post', 'the washington post',
+			     'philippine daily inquirer', 'the irish times', 'wikinews', 'wikinews.org'); // lowercase axact matches
 const NO_PUBLISHER_NEEDED = array('los angeles times', 'new york times magazine', 'the new york times',
                                    'new york times', 'huffington post', 'the daily telegraph', 'forbes.com',
                                    'forbes magazine'); // lowercase axact matches

@@ -424,8 +424,9 @@ public static function expand_by_zotero(Template $template, ?string $url = NULL)
   // Is it actually a URL.  Zotero will search for non-url things too!
   if (filter_var($url, FILTER_VALIDATE_URL) === FALSE) return FALSE; // PHP does not like it
   if (preg_match('~^https?://[^/]+/?$~', $url) === 1) return FALSE; // Just a host name
+  set_time_limit(120); // This can be slow
   if (preg_match(REGEXP_IS_URL, $url) !== 1) return FALSE;  // See https://mathiasbynens.be/demo/url-regex/  This regex is more exact than validator.  We only spend time on this after quick and dirty check is passed
-   
+  set_time_limit(120);
   if (self::$zotero_announced === 1) {
     report_action("Using Zotero translation server to retrieve details from URLs.");
     self::$zotero_announced = 0;
@@ -493,9 +494,22 @@ public static function process_zotero_response(string $zotero_response, Template
   }
   $result = (object) $result ;
   
+  if (empty($result->publicationTitle) && empty($result->bookTitle) && !isset($result->title)) {
+    if (!empty($result->subject)) {
+      $result->title = $result->subject;
+    } elseif (!empty($result->caseName)) {
+      $result->title = $result->caseName;
+    } elseif (!empty($result->nameOfAct)) {
+      $result->title = $result->nameOfAct;
+    }
+  }
   if (!isset($result->title)) {
-    report_warning("Did not get a title for URL ". echoable($url) . ": " . $zotero_response);  // @codeCoverageIgnore
-    return FALSE;                                                                    // @codeCoverageIgnore
+    if (strpos($zotero_response, 'unknown_error') !== FALSE) {  // @codeCoverageIgnoreStart
+       report_info("Did not get a title for URL ". echoable($url));
+    } else {
+       report_minor_error("Did not get a title for URL ". echoable($url) . ": " . $zotero_response); // Odd Error
+    }
+    return FALSE;   // @codeCoverageIgnoreEnd
   }
   if (substr(strtolower(trim($result->title)), 0, 9) === 'not found') {
     report_info("Could not resolve URL " . echoable($url));
@@ -512,6 +526,14 @@ public static function process_zotero_response(string $zotero_response, Template
   unset($result->websiteTitle);
   unset($result->journalAbbreviation);
   unset($result->ISSN);
+  unset($result->subject);
+  unset($result->caseName);
+  unset($result->nameOfAct);
+  
+  if (stripos($url, 'www.royal.uk') !== FALSE) {
+    unset($result->creators);
+    unset($result->author);
+  }
 
   $result->title = convert_to_utf8($result->title);
   // Reject if we find more than 5 or more than 10% of the characters are �.  This means that character
@@ -577,6 +599,8 @@ public static function process_zotero_response(string $zotero_response, Template
       $result->publicationTitle = 'National Post';
    } elseif ($tester === 'financialpost') {
       $result->publicationTitle = 'Financial Post';
+   } elseif ($tester === 'bloomberg.com') {
+      $result->publicationTitle = 'Bloomberg';
    }
   }
    
@@ -875,7 +899,9 @@ public static function process_zotero_response(string $zotero_response, Template
         // also reject 'review' 
         if ($template->wikiname() === 'cite web' &&
             stripos($url . @$result->title . @$result->bookTitle . @$result->publicationTitle, 'review') === FALSE &&
-            stripos($url, 'archive.org') === FALSE && !preg_match('~^https?://[^/]*journal~', $url)) {
+            stripos($url, 'archive.org') === FALSE && !preg_match('~^https?://[^/]*journal~', $url) &&
+            stripos($url, 'booklistonline') === FALSE
+           ) {
           $template->change_name_to('cite book');
         }
         break;
@@ -912,6 +938,7 @@ public static function process_zotero_response(string $zotero_response, Template
         }
         break;
 
+      case 'email': // Often uses subject, not title
       case 'webpage':
       case 'blogPost':
       case 'document':// Could be a journal article or a genuine web page.
@@ -929,7 +956,10 @@ public static function process_zotero_response(string $zotero_response, Template
       case 'podcast':       // @codeCoverageIgnore
       case 'manuscript':       // @codeCoverageIgnore
       case 'artwork':       // @codeCoverageIgnore
+      case 'case':       // @codeCoverageIgnore
+      case 'statute':       // @codeCoverageIgnore
       case 'interview':   // @codeCoverageIgnore
+      case 'radioBroadcast':   // @codeCoverageIgnore
           // Do not change type.  Would need to think about parameters
       case 'patent':       // @codeCoverageIgnore
           // Do not change type. This seems to include things that will just make people angry if we change type to encyclopedia
@@ -1405,7 +1435,7 @@ public static function find_indentifiers_in_urls(Template $template, ?string $ur
           if ($template->blank('pmc')) {
             quietly('report_modification', "Converting URL to PMC parameter");
           }
-          $new_pmc = $match[1] . $match[2];
+          $new_pmc = @$match[1] . @$match[2];
           if (is_null($url_sent)) {
             if (stripos($url, ".pdf") !== FALSE) {
               $test_url = "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC" . $new_pmc . "/";
@@ -1527,7 +1557,7 @@ public static function find_indentifiers_in_urls(Template $template, ?string $ur
           quietly('report_modification', "Converting URL to arXiv parameter");
           $ret = $template->add_if_new('arxiv', $arxiv_id[0]); // Have to add before forget to get cite type right
           if (is_null($url_sent)) {
-            if ($template->has_good_free_copy()) $template->forget($url_type);
+            if ($template->has_good_free_copy() || $template->has('arxiv')  || $template->has('eprint')) $template->forget($url_type);
           }
           return $ret;
         }

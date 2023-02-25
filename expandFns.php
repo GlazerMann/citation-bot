@@ -247,11 +247,16 @@ function sanitize_doi(string $doi) : string {
   }
   if ($pos = (int) strrpos($doi, '/')) {
    $extension = (string) substr($doi, $pos);
-   if (in_array(strtolower($extension), array('/abstract', '/full', '/pdf', '/epdf', '/asset/', '/summary', '/short', '/meta', '/html'))) {
+   if (in_array(strtolower($extension), array('/abstract', '/full', '/pdf', '/epdf', '/asset/', '/summary', '/short', '/meta', '/html', '/'))) {
       $doi = (string) substr($doi, 0, $pos);
    }
   }
-  $doi = str_replace('//', '/', $doi);
+  $new_doi = str_replace('//', '/', $doi);
+  if ($new_doi !== $doi) {
+    if (doi_works($new_doi) || !doi_works($doi)) {
+      $doi = $new_doi; // Double slash DOIs do exist
+    }
+  }
   // And now for 10.1093 URLs
   // The add chapter/page stuff after the DOI in the URL and it looks like part of the DOI to us
   // Things like 10.1093/oxfordhb/9780199552238.001.0001/oxfordhb-9780199552238-e-003 and 10.1093/acprof:oso/9780195304923.001.0001/acprof-9780195304923-chapter-7
@@ -710,7 +715,7 @@ function title_capitalization(string $in, bool $caps_after_punctuation) : string
   /** Italian dell'xxx words **/
   $new_case = safe_preg_replace_callback(
     "~(\s)(Dell|Degli|Delle)([\'\x{00B4}][a-zA-ZÀ-ÿ]{3})~u",
-    function (array $matches) : string {return $matches[1] . strtolower($matches[2]) . $matches[3];},
+    function (array $matches) : string {return $matches[1] . mb_strtolower($matches[2]) . $matches[3];},
     $new_case
   );
 
@@ -727,7 +732,7 @@ function title_capitalization(string $in, bool $caps_after_punctuation) : string
   // Catch some specific epithets, which should be lowercase
   $new_case = safe_preg_replace_callback(
     "~(?:'')?(?P<taxon>\p{L}+\s+\p{L}+)(?:'')?\s+(?P<nova>(?:(?:gen\.? no?v?|sp\.? no?v?|no?v?\.? sp|no?v?\.? gen)\b[\.,\s]*)+)~ui" /* Species names to lowercase */,
-    function (array $matches) : string {return "''" . mb_ucfirst(strtolower($matches['taxon'])) . "'' " . strtolower($matches["nova"]);},
+    function (array $matches) : string {return "''" . mb_ucfirst(mb_strtolower($matches['taxon'])) . "'' " . mb_strtolower($matches["nova"]);},
     $new_case);
 
   // "des" at end is "Des" for Design not german "The"
@@ -1079,7 +1084,8 @@ function can_safely_modify_dashes(string $value) : bool {
 }
 
 function str_i_same(string $str1, string $str2) : bool {
-   return (0 === strcasecmp($str1, $str2));
+   if (0 === strcasecmp($str1, $str2)) return TRUE; // Quick non-multi-byte compare short cut
+   return (0 === strcmp(mb_strtoupper($str1), mb_strtoupper($str2)));
 }
   
 function doi_encode (string $doi) : string {

@@ -284,9 +284,14 @@ function arxiv_api(array $ids, array &$templates) : bool {  // Pointer to save m
        $this_template->add_if_new("year", date("Y", $int_time), 'arxiv');
     }
 
-    if ($entry->arxivjournal_ref) {
+    if ($entry->arxivjournal_ref && $this_template->blank(['doi','pmid','pmc'])) {
       $journal_data = trim((string) $entry->arxivjournal_ref); // this is human readble text
       parse_plain_text_reference($journal_data, $this_template, TRUE);
+    }
+    if ($this_template->has('publisher')) {
+      if (stripos($this_template->get('publisher'), 'arxiv') !== FALSE) {
+        $this_template->forget('publisher');
+      }
     }
     $this_template = next($templates);
   }
@@ -500,7 +505,7 @@ function expand_by_doi(Template $template, bool $force = FALSE) : bool {
       if ((string) @$crossRef->series_title === 'Professional Paper') unset($crossRef->series_title);
       if ($template->has('book-title')) unset($crossRef->volume_title);
       if ($crossRef->volume_title && ($template->blank(WORK_ALIASES) || $template->wikiname() === 'cite book')) {
-        if (strtolower($template->get('title')) === strtolower((string) $crossRef->article_title)) {
+        if (mb_strtolower($template->get('title')) === mb_strtolower((string) $crossRef->article_title)) {
            $template->rename('title', 'chapter');
          } else {
            $template->add_if_new('chapter', restore_italics((string) $crossRef->article_title), 'crossref'); // add_if_new formats this value as a title
@@ -1120,6 +1125,7 @@ function expand_templates_from_archives(array &$templates) : void { // This is d
       /** @psalm-taint-escape ssrf */
       $archive_url = $template->get('archive-url') . $template->get('archiveurl');
       if (stripos($archive_url, 'archive') !==FALSE && stripos($archive_url, '.pdf') === FALSE) {
+        set_time_limit(120);
         throttle_archive();
         curl_setopt($ch, CURLOPT_URL, $archive_url);
         $raw_html = (string) @curl_exec($ch);
@@ -1129,9 +1135,11 @@ function expand_templates_from_archives(array &$templates) : void { // This is d
                       '~<html[\S\s]+<head[\S\s]+?<!-- End Wayback Rewrite JS Include -->[\s\S]*?<title>([\S\s]+?\S[\S\s]+?)<\/title>[\S\s]+?head[\S\s]+?<body~i',
                       '~<html[\S\s]+<head[\S\s]+?<!-- End Wayback Rewrite JS Include -->\s*?<!-- WebPoet\(tm\) Web Page Pull[\s\S]+?-->[\S\s]+?<title>([\S\s]+?\S[\S\s]+?)<\/title>[\S\s]+?head~i',
                       '~archive\.org/includes/analytics\.js[\S\s]+?-- End Wayback Rewrite JS Include[\S\s]+?head[\S\s]+<title>([\S\s]+?\S[\S\s]+?)<\/title>[\S\s]+?head[\S\s]+?<body~') as $regex) {
-         if ($raw_html && preg_match($regex, $raw_html, $match)) {
-          $title = trim($match[1]);
-          if (stripos($title, 'archive') === FALSE &&
+          set_time_limit(120); // Slow regex sometimes
+          if ($raw_html && preg_match($regex, $raw_html, $match)) {
+           set_time_limit(120);
+           $title = trim($match[1]);
+           if (stripos($title, 'archive') === FALSE &&
               stripos($title, 'wayback') === FALSE &&
               $title !== ''
              ) {
@@ -1388,7 +1396,7 @@ function process_bibcode_data(Template $this_template, object $record) : void {
       $doi = (string) @$record->doi[0];
       if (doi_works($doi)) {
         $this_template->add_if_new('doi', $doi);
-        AdsAbsControl::add_doi_map($this_template->get('bibcode'), $doi);
+        if ($this_template->has('bibcode')) AdsAbsControl::add_doi_map($this_template->get('bibcode'), $doi);
       }
     } elseif ($this_template->has('bibcode')) { // Slow mode looks for existent bibcodes
       AdsAbsControl::add_doi_map($this_template->get('bibcode'), 'X');
