@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+const BORING_STUFF = ["boring", "removed", "added", "changed", "subsubitem", "subitem"];
+
 require_once 'constants.php';   // @codeCoverageIgnore
 
 function html_echo(string $text, string $alternate_text=''): void {
@@ -13,12 +15,12 @@ function html_echo(string $text, string $alternate_text=''): void {
 function user_notice(string $symbol, string $class, string $text): void {
     if (!TRAVIS || defined("TRAVIS_PRINT")) {
         // @codeCoverageIgnoreStart
-        if (defined('BIG_JOB_MODE') && in_array($class, ["boring", "removed", "added", "changed", "subsubitem", "subitem"], true)) {
+        if (defined('BIG_JOB_MODE') && in_array($class, BORING_STUFF, true)) {
             echo '.'; // Echo something to keep the code alive, but not so much to overfill the cache
             return;
         }
         // These are split over three lines to avoid creating a single long string during error conditions - which could blow out the memory
-        echo "\n " . (HTML_OUTPUT ? "<span class='{$class}'>" : "") . $symbol;
+        echo "\n ", (HTML_OUTPUT ? "<span class='{$class}'>" : ""), $symbol;
         if (defined('BIG_JOB_MODE') && strlen($text) > 1000) { // No one looks at this anyway - long ones are often URLs in zotero errors
             echo "HUGE amount of text NOT printed";
             bot_debug_log("HUGE amount of text NOT printed.  Here is a bit: " .  substr($text, 0, 500));

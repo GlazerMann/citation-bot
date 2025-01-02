@@ -2,23 +2,22 @@
 
 declare(strict_types=1);
 
-require_once 'constants.php';           // @codeCoverageIgnore
-require_once 'Template.php';            // @codeCoverageIgnore
-require_once 'big_jobs.php';            // @codeCoverageIgnore
+require_once 'constants.php';     // @codeCoverageIgnore
+require_once 'Template.php';      // @codeCoverageIgnore
+require_once 'big_jobs.php';      // @codeCoverageIgnore
+
+const MONTH_SEASONS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Winter', 'Spring', 'Summer', 'Fall', 'Autumn'];
+const DAYS_OF_WEEKS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Mony', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
+const TRY_ENCODE = ["windows-1255", "maccyrillic", "windows-1253", "windows-1256", "tis-620", "windows-874", "iso-8859-11", "big5", "windows-1250"];
+const INSANE_ENCODE = ['utf-8-sig', 'x-user-defined'];
+const SANE_ENCODE = ['utf-8', 'iso-8859-1', 'windows-1252', 'unicode', 'us-ascii', 'none', 'iso-8859-7', 'latin1', '8859-1', '8859-7'];
+const DOI_BAD_ENDS = ['.htm', '.html', '.jpg', '.jpeg', '.pdf', '.png', '.xml', '.full'];
+const DOI_BAD_ENDS2 = ['/abstract', '/full', '/pdf', '/epdf', '/asset/', '/summary', '/short', '/meta', '/html', '/'];
 
 final class HandleCache {
     // Greatly speed-up by having one array of each kind and only look for hash keys, not values
     private const MAX_CACHE_SIZE = 100000;
     public const MAX_HDL_SIZE = 1024;
-    private const BAD_DOI_ARRAY = [
-        '10.1126/science' => true,
-        '' => true,
-        '10.7556/jaoa' => true,
-        '10.1267/science.040579197' => true,
-        '10.0000/Rubbish_bot_failure_test' => true,
-        '10.0000/Rubbish_bot_failure_test2' => true,
-        '10.0000/Rubbish_bot_failure_test.x' => true,
-    ];
 
     /** @var array<bool> $cache_active */
     public static array $cache_active = [];              // DOI is in CrossRef and works
@@ -29,7 +28,7 @@ final class HandleCache {
     /** @var array<string> $cache_hdl_loc */
     public static array $cache_hdl_loc = [];             // Final HDL location URL
     /** @var array<bool> $cache_hdl_bad */
-    public static array $cache_hdl_bad = self::BAD_DOI_ARRAY;    // HDL/DOI does not resolve to anything
+    public static array $cache_hdl_bad = BAD_DOI_ARRAY;    // HDL/DOI does not resolve to anything
     /** @var array<bool> $cache_hdl_null */
     public static array $cache_hdl_null = [];            // HDL/DOI resolves to null
 
@@ -49,7 +48,7 @@ final class HandleCache {
         self::$cache_inactive = [];
         self::$cache_good = [];
         self::$cache_hdl_loc = [];
-        self::$cache_hdl_bad = self::BAD_DOI_ARRAY;
+        self::$cache_hdl_bad = BAD_DOI_ARRAY;
         self::$cache_hdl_null = [];
         gc_collect_cycles();
     }
@@ -83,7 +82,7 @@ function doi_active(string $doi): ?bool {
 function doi_works(string $doi): ?bool {
     $doi = trim($doi);
     if (strlen($doi) > HandleCache::MAX_HDL_SIZE) {
-        return null;
+        return null;   // @codeCoverageIgnore
     }
     if (isset(HandleCache::$cache_good[$doi])) {
         return true;
@@ -92,21 +91,29 @@ function doi_works(string $doi): ?bool {
         return false;
     }
     if (isset(HandleCache::$cache_hdl_null[$doi])) {
-        return null;
+        return null;   // @codeCoverageIgnore
     }
     HandleCache::check_memory_use();
 
     $works = is_doi_works($doi);
-    if ($works === null) {
-        // These are unexpected nulls
-        HandleCache::$cache_hdl_null[$doi] = true;
-        return null;   // @codeCoverageIgnoreEnd
+    if ($works === null) {  // These are unexpected nulls
+        HandleCache::$cache_hdl_null[$doi] = true;   // @codeCoverageIgnore
+        return null;   // @codeCoverageIgnore
     }
     if ($works === false) {
         HandleCache::$cache_hdl_bad[$doi] = true;
+        if (isset(NULL_DOI_BUT_GOOD[$doi])) {
+            if (strpos($doi, '10.1175/') === 0) { // TODO - just do them all and no longer even try????
+                return true;
+            }
+            bot_debug_log('Got bad for good HDL: ' . echoable_doi($doi));
+        }
         return false;
     }
     HandleCache::$cache_good[$doi] = true;
+    if (isset(NULL_DOI_LIST[$doi])) {
+        bot_debug_log('Got good for bad HDL: ' . echoable_doi($doi));
+    }
     return true;
 }
 
@@ -129,16 +136,20 @@ function is_doi_active(string $doi): ?bool {
     $response_code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     if ($header === "" || ($response_code === 503) || ($response_code === 429)) {
         sleep(4);                                                             // @codeCoverageIgnoreStart
-        if ($response_code === 429) sleep(4);  // WE are getting blocked
+        if ($response_code === 429) {
+            sleep(4);  // WE are getting blocked
+        }
         $return = bot_curl_exec($ch);
         $response_code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $header_length = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $header = substr($return, 0, $header_length);
         $body = substr($return, $header_length);                               // @codeCoverageIgnoreEnd
     }
-    if ($response_code === 429) sleep(10);  // WE are still getting blocked
+    if ($response_code === 429) {  // WE are still getting blocked
+        sleep(10);   // @codeCoverageIgnore
+    }
     if ($header === "" || ($response_code === 503) || ($response_code === 429)) {
-        return null;
+        return null;  // @codeCoverageIgnore
     }
     if ($body === 'Resource not found.'){
         return false;
@@ -149,7 +160,7 @@ function is_doi_active(string $doi): ?bool {
     if ($response_code === 404) { // @codeCoverageIgnoreStart
         return false;
     }
-    $err = "CrossRef server error loading headers for DOI " . echoable($doi . " : " . (string) $response_code);
+    $err = "CrossRef server error loading headers for DOI " . echoable_doi($doi) . " : " . echoable((string) $response_code);
     bot_debug_log($err);
     report_warning($err);
     return null;                  // @codeCoverageIgnoreEnd
@@ -195,6 +206,9 @@ function is_doi_works(string $doi): ?bool {
     if (isset(NULL_DOI_ANNOYING[$doi])) {
         return false;
     }
+    if (preg_match('~^10\.4435\/BSPI\.~i', $doi)) {
+        return false;  // TODO: old ones like 10.4435/BSPI.2018.11 are casinos, and new one like 10.4435/BSPI.2024.06 go to the main page
+    }
     $registrant = $matches[1];
     // TODO this will need updated over time.    See registrant_err_patterns on https://en.wikipedia.org/wiki/Module:Citation/CS1/Identifiers
     // 17 August 2024 version is last check
@@ -217,12 +231,7 @@ function is_doi_works(string $doi): ?bool {
     $url = "https://doi.org/" . doi_encode($doi);
     $headers_test = get_headers_array($url);
     if ($headers_test === false) {
-        if (strpos($doi, '10.2277/') === 0 || // Rogue
-                preg_match('~^10\.1038/nature\d{5}$~i', $doi) || // Nature dropped the ball
-                stripos($doi, '10.17312/harringtonparkpress/') === 0 ||
-                stripos($doi, '10.3149/csm.') === 0 ||
-                stripos($doi, '10.5047/meep.') === 0 ||
-                stripos($doi, '10.4435/BSPI.') === 0) {
+        if (preg_match('~^10\.1038/nature\d{5}$~i', $doi)) {
             return false;
         }
         if (isset(NULL_DOI_LIST[$doi])) {
@@ -237,7 +246,7 @@ function is_doi_works(string $doi): ?bool {
             return true;     // @codeCoverageIgnoreStart
         }
         $headers_test = get_headers_array($url);
-        bot_debug_log('Got null for HDL: ' . str_ireplace(['&lt;', '&gt;'], ['<', '>'], echoable($doi)));     // @codeCoverageIgnoreEnd
+        bot_debug_log('Got null for HDL: ' . echoable_doi($doi));     // @codeCoverageIgnoreEnd
     }
     if ($headers_test === false) {
         $headers_test = get_headers_array($url);     // @codeCoverageIgnore
@@ -246,12 +255,12 @@ function is_doi_works(string $doi): ?bool {
         return null;     // @codeCoverageIgnore
     }
     if (stripos($doi, '10.1126/scidip.') === 0) {
-        if ((string) @$headers_test['1'] === 'HTTP/1.1 404 Forbidden') {
-            unset($headers_test['1']); // https://doi.org/10.1126/scidip.ado5059
+        if ((string) @$headers_test['1'] === 'HTTP/1.1 404 Forbidden') {  // https://doi.org/10.1126/scidip.ado5059
+            unset($headers_test['1']); // @codeCoverageIgnore
         }
     }
-    if (interpret_doi_header($headers_test) !== false) {
-        return interpret_doi_header($headers_test);
+    if (interpret_doi_header($headers_test, $doi) !== false) {
+        return interpret_doi_header($headers_test, $doi);
     }
     // Got 404 - try again, since we cache this and add doi-broken-date to pages, we should be double sure
     $headers_test = get_headers_array($url);
@@ -259,11 +268,11 @@ function is_doi_works(string $doi): ?bool {
     if ($headers_test === false) {
         return false;
     }
-    return (bool) interpret_doi_header($headers_test);
+    return (bool) interpret_doi_header($headers_test, $doi);
 }
 
 /** @param array<string|array<string>> $headers_test */
-function interpret_doi_header(array $headers_test): ?bool {
+function interpret_doi_header(array $headers_test, string $doi): ?bool {
     if (empty($headers_test['Location']) && empty($headers_test['location'])) {
         return false; // leads nowhere
     }
@@ -274,14 +283,34 @@ function interpret_doi_header(array $headers_test): ?bool {
     /** @psalm-suppress InvalidArrayOffset */
     $resp2 = (string) @$headers_test['2'];
 
+    if (strpos($resp0, '302') !== false && strpos($resp1, '301') !== false && strpos($resp2, '404') !== false) {
+        if (isset(NULL_DOI_LIST[$doi])) {
+            return false;
+        }
+        if (isset(NULL_DOI_BUT_GOOD[$doi])) {
+            return true;
+        }
+        bot_debug_log('Got weird stuff for HDL: ' . echoable_doi($doi));
+        return null;
+    }
+    if (strpos($resp0, '302') !== false && strpos($resp1, '503') !== false && $resp2 === '') {
+        if (isset(NULL_DOI_LIST[$doi])) {
+            return false;
+        }
+        if (isset(NULL_DOI_BUT_GOOD[$doi])) {
+            return true;
+        }
+        bot_debug_log('Got two bad hops for HDL: ' . echoable_doi($doi));
+        return null;
+    }
     if (stripos($resp0 . $resp1 . $resp2, '404 Not Found') !== false || stripos($resp0 . $resp1 . $resp2, 'HTTP/1.1 404') !== false) {
         return false; // Bad
     }
     if (stripos($resp0, '302 Found') !== false || stripos($resp0, 'HTTP/1.1 302') !== false) {
         return true;    // Good
     }
-    if (stripos((string) @json_encode($headers_test), 'dtic.mil') !== false) {
-        return true; // grumpy
+    if (stripos((string) @json_encode($headers_test), 'dtic.mil') !== false) { // grumpy
+        return true;  // @codeCoverageIgnore
     }
     if (stripos($resp0, '301 Moved Permanently') !== false || stripos($resp0, 'HTTP/1.1 301') !== false) { // Could be DOI change or bad prefix
         if (stripos($resp1, '302 Found') !== false || stripos($resp1, 'HTTP/1.1 302') !== false) {
@@ -308,8 +337,8 @@ function get_loc_from_hdl_header(array $headers_test): ?string {
         return (string) $headers_test['location'][0];    // @codeCoverageIgnore
     } elseif (isset($headers_test['location'])) {
         return (string) $headers_test['location'];
-    } elseif (isset($headers_test['Location'])) {
-        return (string) $headers_test['Location'];
+    } elseif (isset($headers_test['Location'])) {        // @codeCoverageIgnore
+        return (string) $headers_test['Location'];       // @codeCoverageIgnore
     } else { // @codeCoverageIgnoreStart
         bot_debug_log("Got weird header from handle: " . echoable(print_r($headers_test, true)));    // Is this even possible
         return null;
@@ -343,7 +372,7 @@ function sanitize_doi(string $doi): string {
     $pos = (int) strrpos($doi, '.');
     if ($pos) {
         $extension = (string) substr($doi, $pos);
-        if (in_array(strtolower($extension), ['.htm', '.html', '.jpg', '.jpeg', '.pdf', '.png', '.xml', '.full'], true)) {
+        if (in_array(strtolower($extension), DOI_BAD_ENDS, true)) {
             $doi = (string) substr($doi, 0, $pos);
         }
     }
@@ -364,7 +393,7 @@ function sanitize_doi(string $doi): string {
     $pos = (int) strrpos($doi, '/');
     if ($pos) {
         $extension = (string) substr($doi, $pos);
-        if (in_array(strtolower($extension), ['/abstract', '/full', '/pdf', '/epdf', '/asset/', '/summary', '/short', '/meta', '/html', '/'], true)) {
+        if (in_array(strtolower($extension), DOI_BAD_ENDS2, true)) {
             $doi = (string) substr($doi, 0, $pos);
         }
     }
@@ -455,13 +484,19 @@ function wikify_external_text(string $title): string {
         }
         $title = str_replace(['<mo stretchy="false">', "<mo stretchy='false'>"], '', $title);
     }
+    if (mb_substr($title, -6) === "&nbsp;") {
+        $title = mb_substr($title, 0, -6);
+    }
+    if (mb_substr($title, -10) === "&amp;nbsp;") {       
+        $title = mb_substr($title, 0, -10);
+    } 
     // Sometimes stuff is encoded more than once
     $title = html_entity_decode($title, ENT_COMPAT | ENT_HTML401, "UTF-8");
     $title = html_entity_decode($title, ENT_COMPAT | ENT_HTML401, "UTF-8");
     $title = html_entity_decode($title, ENT_COMPAT | ENT_HTML401, "UTF-8");
     $title = safe_preg_replace("~\s+~", " ", $title);    // Remove all white spaces before
     if (mb_substr($title, -6) === "&nbsp;") {
-        $title = mb_substr($title, 0, -6);
+        $title = mb_substr($title, 0, -6); // @codeCoverageIgnore
     }
     // Special code for ending periods
     while (mb_substr($title, -2) === "..") {
@@ -555,7 +590,7 @@ function wikify_external_text(string $title): string {
 
     $num_replace = count($replacement);
     for ($i = 0; $i < $num_replace; $i++) {
-        $title = str_replace($placeholder[$i], $replacement[$i], $title); // @phan-suppress-current-line PhanTypePossiblyInvalidDimOffset
+        $title = str_ireplace($placeholder[$i], $replacement[$i], $title); // @phan-suppress-current-line PhanTypePossiblyInvalidDimOffset
     }
 
     foreach (['<msup>', '<msub>', '<mroot>', '<msubsup>', '<munderover>', '<mrow>', '<munder>', '<mtable>', '<mtr>', '<mtd>'] as $mathy) {
@@ -648,8 +683,8 @@ function str_remove_irrelevant_bits(string $str): string {
     $str = str_replace(" & ", " and ", $str);
     $str = str_replace(" / ", " and ", $str);
     $str = trim($str);
-    $str = str_ireplace(['Proceedings', 'Proceeding', 'Symposium', 'Huffington ', 'the Journal of ', 'nytimes.com', '& ', '(Clifton, N.J.)'],
-                        ['Proc', 'Proc', 'Sym', 'Huff ', 'journal of ', 'New York Times', 'and ', ''], $str);
+    $str = str_ireplace(['Proceedings', 'Proceeding', 'Symposium', 'Huffington ', 'the Journal of ', 'nytimes.com', '& ', '(Clifton, N.J.)', '(Clifton NJ)'],
+                        ['Proc', 'Proc', 'Sym', 'Huff ', 'journal of ', 'New York Times', 'and ', '', ''], $str);
     $str = str_ireplace(['<sub>', '<sup>', '<i>', '<b>', '</sub>', '</sup>', '</i>', '</b>', '<p>', '</p>', '<title>', '</title>'], '', $str);
     $str = str_ireplace(['SpringerVerlag', 'Springer Verlag Springer', 'Springer Verlag', 'Springer Springer'],
                                             ['Springer',             'Springer',                                 'Springer',                'Springer'               ], $str);
@@ -705,8 +740,8 @@ function titles_are_dissimilar(string $inTitle, string $dbTitle): bool {
                 $inTitle = $possible;
         } else { // When PHP fails with unicode, try without it
             $inTitle = preg_replace("~# # # CITATION_BOT_PLACEHOLDER_[A-Z]+ \d+ # # #~i", ' ', $inTitle);  // @codeCoverageIgnore
-            if ($inTitle === null) {
-                return true;
+            if ($inTitle === null) {     // @codeCoverageIgnore
+                return true;             // @codeCoverageIgnore
             }
         }
     }
@@ -804,9 +839,10 @@ function straighten_quotes(string $str, bool $do_more): string { // (?<!\') and 
             $str = safe_preg_replace('~&[lr]saquo;|[\x{2039}\x{203A}]|[‹›]~u', "'", $str);                      // Websites tiles: Jobs ›› Iowa ›› Cows ›› Ames
     }
     $str = safe_preg_replace('~&#822[013];|[\x{201C}-\x{201F}]|&[rlb][d]?quo;~u', '"', $str);
-    if((mb_strpos($str, '&raquo;')  !== false && mb_strpos($str, '&laquo;')  !== false) ||
+    if(in_array(WIKI_BASE, ENGLISH_WIKI, true) && (
+        (mb_strpos($str, '&raquo;')  !== false && mb_strpos($str, '&laquo;')  !== false) ||
             (mb_strpos($str, '\x{00AB}') !== false && mb_strpos($str, '\x{00AB}') !== false) ||
-            (mb_strpos($str, '«') !== false && mb_strpos($str, '»') !== false)) { // Only replace double angle quotes if some of both // Websites tiles: Jobs » Iowa » Cows » Ames
+            (mb_strpos($str, '«') !== false && mb_strpos($str, '»') !== false))) { // Only replace double angle quotes if some of both // Websites tiles: Jobs » Iowa » Cows » Ames
         if ($do_more){
             $str = safe_preg_replace('~&[lr]aquo;|[\x{00AB}\x{00BB}]|[«»]~u', '"', $str);
         } else { // Only outer funky quotes, not inner quotes
@@ -1161,8 +1197,8 @@ function throttle(): void {
     }
     if ($time_since_last_write < $min_interval) {
         $time_to_pause = (int) floor($min_interval - $time_since_last_write); // @codeCoverageIgnore
-        report_info("Throttling: waiting {$time_to_pause} seconds...");                   // @codeCoverageIgnore
-        sleep($time_to_pause);                                                                                              // @codeCoverageIgnore
+        report_info("Throttling: waiting " . $time_to_pause . " seconds..."); // @codeCoverageIgnore
+        sleep($time_to_pause);                                                // @codeCoverageIgnore
     }
     $last_write_time = time();
 }
@@ -1695,7 +1731,7 @@ function check_memory_usage(string $where): void {
     }
     $mem_used = (int) (memory_get_peak_usage() / 1048576);
     if ($mem_used > 128) {
-        bot_debug_log("Peak memory Usage is up to " . (string) $mem_used . "MB in " . $where);
+        bot_debug_log("Peak memory Usage is up to " . (string) $mem_used . "MB in " . $where); // @codeCoverageIgnore
     }
 }
 
@@ -1728,12 +1764,14 @@ function bot_html_header(): void {
     }
 }
 
+// @codeCoverageIgnoreStart
 function bot_html_footer(): void {
     if (HTML_OUTPUT) {
         echo '</pre><footer><a href="./" title="Use Citation Bot again" aria-label="Use Citation Bot again (return to main page)">Another</a>?</footer></body></html>'; // @codeCoverageIgnore
     }
     echo "\n";
 }
+// @codeCoverageIgnoreEnd
 
 /** null/false/String of location */
 function hdl_works(string $hdl): string|null|false {
@@ -1759,7 +1797,7 @@ function hdl_works(string $hdl): string|null|false {
         return false;
     }
     if (isset(HandleCache::$cache_hdl_null[$hdl])) {
-        return null;
+        return null; // @codeCoverageIgnore
     }
     if (strpos($hdl, '10.') === 0 && doi_works($hdl) === false) {
         return false;
@@ -1796,13 +1834,13 @@ function is_hdl_works(string $hdl): string|null|false {
     if ($headers_test === false) {
         $headers_test = get_headers_array($url); // @codeCoverageIgnore
     }
-    if ($headers_test === false) {
-        return null; // most likely bad
+    if ($headers_test === false) { // most likely bad
+        return null; // @codeCoverageIgnore
     }
-    if (interpret_doi_header($headers_test) === null) {
-        return null;
+    if (interpret_doi_header($headers_test, $hdl) === null) {
+        return null; // @codeCoverageIgnore
     }
-    if (interpret_doi_header($headers_test) === false) {
+    if (interpret_doi_header($headers_test, $hdl) === false) {
         return false;
     }
     return get_loc_from_hdl_header($headers_test);
@@ -1815,7 +1853,7 @@ function safe_preg_replace(string $regex, string $replace, string $old): string 
     }
     $new = preg_replace($regex, $replace, $old);
     if ($new === null) {
-        return $old;
+        return $old; // @codeCoverageIgnore
     }
     return $new;
 }
@@ -1825,7 +1863,7 @@ function safe_preg_replace_callback(string $regex, callable $replace, string $ol
     }
     $new = preg_replace_callback($regex, $replace, $old);
     if ($new === null) {
-        return $old;
+        return $old; // @codeCoverageIgnore
     }
     return $new;
 }
@@ -1899,7 +1937,7 @@ function convert_to_utf8_inside(string $value): string {
 
 function is_encoding_reasonable(string $encode): bool { // common "default" ones that are often wrong
     $encode = strtolower($encode);
-    return !in_array($encode, ['utf-8', 'iso-8859-1', 'windows-1252', 'unicode', 'us-ascii', 'none', 'iso-8859-7', 'latin1', '8859-1', '8859-7'], true);
+    return !in_array($encode, SANE_ENCODE, true);
 }
 
 function smart_decode(string $title, string $encode, string $archive_url): string {
@@ -1921,7 +1959,7 @@ function smart_decode(string $title, string $encode, string $archive_url): strin
     if (preg_match('~^ISO\-(.+)$~', $encode)) {
         $encode = 'iso-' . $encode[1];
     }
-    if (in_array($encode, ['utf-8-sig', 'x-user-defined'], true)) { // Known wonky ones
+    if (in_array($encode, INSANE_ENCODE, true)) {
         return "";
     }
     $master_list = mb_list_encodings();
@@ -1930,7 +1968,7 @@ function smart_decode(string $title, string $encode, string $archive_url): strin
         $valid[] = strtolower($enc);
     }
     try {
-        if (in_array(strtolower($encode), ["windows-1255", "maccyrillic", "windows-1253", "windows-1256", "tis-620", "windows-874", "iso-8859-11", "big5", "windows-1250"], true) ||
+        if (in_array(strtolower($encode), TRY_ENCODE, true) ||
             !in_array(strtolower($encode), $valid, true)) {
             $try = (string) @iconv($encode, "UTF-8", $title);
         } else {
@@ -2395,7 +2433,7 @@ function get_possible_dois(string $doi): array {
         $pos = strrpos($try, '.');
         if ($pos) {
             $extension = substr($try, $pos);
-            if (in_array(strtolower($extension), ['.htm', '.html', '.jpg', '.jpeg', '.pdf', '.png', '.xml', '.full'], true)) {
+            if (in_array(strtolower($extension), DOI_BAD_ENDS, true)) {
                 $try = substr($try, 0, $pos);
                 $trial[] = $try;
                 $changed = true;
@@ -2422,7 +2460,7 @@ function get_possible_dois(string $doi): array {
         $pos = strrpos($try, '/');
         if ($pos) {
             $extension = substr($try, $pos);
-            if (in_array(strtolower($extension), ['/abstract', '/full', '/pdf', '/epdf', '/asset/', '/summary', '/short'], true)) {
+            if (in_array(strtolower($extension), DOI_BAD_ENDS2, true)) {
                 $try = substr($try, 0, $pos);
                 $trial[] = $try;
                 $changed = true;
@@ -2929,9 +2967,7 @@ function clean_dates(string $input): string { // See https://en.wikipedia.org/wi
     if ($input === '0001-11-30') {
         return '';
     }
-    $days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Mony', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'];
-    $months_seasons = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Winter', 'Spring', 'Summer', 'Fall', 'Autumn'];
-    $input = str_ireplace($months_seasons, $months_seasons, $input); // capitalization
+    $input = str_ireplace(MONTH_SEASONS, MONTH_SEASONS, $input); // capitalization
     if (preg_match('~^(\d{4})[\-\/](\d{4})$~', $input, $matches)) { // Hyphen or slash in year range (use en dash)
         return $matches[1] . '–' . $matches[2];
     }
@@ -2972,7 +3008,7 @@ function clean_dates(string $input): string { // See https://en.wikipedia.org/wi
         return $matches[1];
     }
     if (preg_match('~^([A-Z][a-z]+)\, ([A-Z][a-z]+ \d+,* \d{4})$~', $input, $matches)) { // Monday, November 2, 1981
-        if (in_array($matches[1], $days_of_week, true)) {
+        if (in_array($matches[1], DAYS_OF_WEEKS, true)) {
             return $matches[2];
         }
     }
@@ -2988,7 +3024,7 @@ function clean_dates(string $input): string { // See https://en.wikipedia.org/wi
         $year = $matches[1];
         $month = (int) $matches[2];
         if ($month > 0 && $month < 13) {
-            return $months_seasons[$month-1] . ' ' . $year;
+            return MONTH_SEASONS[$month-1] . ' ' . $year;
         }
     }
     return $input;
@@ -3025,7 +3061,7 @@ function get_headers_array(string $url): false|array {
     } elseif (strpos($url, 'https://hdl.handle.net') === 0) {
         return @get_headers($url, true, $context_insecure_hdl);
     } else {
-        report_error("BAD URL in get_headers_array");
+        report_error("BAD URL in get_headers_array"); // @codeCoverageIgnore
     }
 }
 
@@ -3290,4 +3326,8 @@ function string_is_book_series(string $str): bool {
     $simple = trim(str_replace(['-', '.', '   ', '  ', '[[', ']]'], [' ', ' ', ' ', ' ', ' ', ' '], strtolower($str)));
     $simple = trim(str_replace(['    ', '   ', '  '], [' ', ' ', ' '], $simple));
     return in_array($simple, JOURNAL_IS_BOOK_SERIES, true);
+}
+
+function echoable_doi(string $doi): string {
+    return str_ireplace(['&lt;', '&gt;'], ['<', '>'], echoable($doi));
 }

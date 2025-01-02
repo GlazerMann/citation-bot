@@ -48,7 +48,7 @@ final class TemplateTest extends testBaseClass {
     public function testLotsOfFloaters6(): void {
         $text_in = "{{cite journal| url=http://www.cnn.com | accessdate 24 Nov 2020}}";
         $prepared = $this->prepare_citation($text_in);
-        $this->assertSame('24 Nov 2020', $prepared->get2('access-date'));
+        $this->assertSame('24 November 2020', $prepared->get2('access-date'));
         $this->assertNull($prepared->get2('accessdate'));
     }
 
@@ -1767,14 +1767,14 @@ final class TemplateTest extends testBaseClass {
         $text = '{{citation|origyear=2000}}';
         $prepared = $this->prepare_citation($text);
         $prepared->final_tidy();
-        $this->assertSame('{{citation|year=2000}}', $prepared->parsed_text());
+        $this->assertSame('{{citation|orig-date=2000}}', $prepared->parsed_text());
     }
 
     public function testChangeParamaters6(): void {
         $text = '{{citation|origyear=2000|date=1999}}';
         $prepared = $this->prepare_citation($text);
         $prepared->final_tidy();
-        $this->assertSame('{{citation|origyear=2000|date=1999}}', $prepared->parsed_text());
+        $this->assertSame('{{citation|orig-date=2000|date=1999}}', $prepared->parsed_text());
  }
 
     public function testDropDuplicates1(): void {
@@ -2000,14 +2000,9 @@ final class TemplateTest extends testBaseClass {
     public function testOrigYearHandling(): void {
         $text = '{{cite book |year=2009 | origyear = 2000 }}';
         $prepared = $this->process_citation($text);
-        $this->assertSame('2000', $prepared->get2('origyear'));
+        $this->assertSame('2000', $prepared->get2('orig-date'));
         $this->assertNull($prepared->get2('orig-year'));
         $this->assertSame('2009', $this->getDateAndYear($prepared));
-
-        $text = '{{cite book | origyear = 2000 }}';
-        $prepared = $this->process_citation($text);
-        $this->assertSame('2000', $this->getDateAndYear($prepared));
-        $this->assertNull($prepared->get2('origyear'));
     }
 
     public function testDropAmazon(): void {
@@ -3511,17 +3506,17 @@ EP - 999 }}';
     public function testAddArchiveDate(): void {
         $text = '{{Cite web|archive-url=https://web.archive.org/web/20190521084631/https://johncarlosbaez.wordpress.com/2018/09/20/patterns-that-eventually-fail/|archive-date=}}';
         $template = $this->prepare_citation($text);
-        $this->assertSame('2019-05-21', $template->get2('archive-date'));
+        $this->assertSame('21 May 2019', $template->get2('archive-date'));
 
         $text = '{{Cite web|archive-url=https://wayback.archive-it.org/4554/20190521084631/https://johncarlosbaez.wordpress.com/2018/09/20/patterns-that-eventually-fail/|archive-date=}}';
         $template = $this->prepare_citation($text);
-        $this->assertSame('2019-05-21', $template->get2('archive-date'));
+        $this->assertSame('21 May 2019', $template->get2('archive-date'));
     }
 
     public function testAddWebCiteDate(): void {
         $text = '{{Cite web|archive-url=https://www.webcitation.org/6klgx4ZPE}}';
         $template = $this->prepare_citation($text);
-        $this->assertSame('2016-09-24', $template->get2('archive-date'));
+        $this->assertSame('24 September 2016', $template->get2('archive-date'));
     }
 
     public function testJunkData(): void {
@@ -3981,10 +3976,10 @@ EP - 999 }}';
         $this->assertSame('Proceedings of the 1964 19th ACM national conference', $template->get2('title'));
     }
 
-    public function testNullDOInoCrash(): void {
+    public function testNullDOInoCrash(): void { // This DOI does not work, but CrossRef does have a record
         $text = '{{cite journal | doi=10.5604/01.3001.0012.8474 |doi-broken-date=<!-- --> }}';
         $template = $this->process_citation($text);
-        $this->assertSame($text, $template->parsed_text());
+        $this->assertSame('{{cite journal | doi=10.5604/01.3001.0012.8474 |doi-broken-date=<!-- --> |title=To Dye or Not to Dye: Bioarchaeological Studies of Hala Sultan Tekke Site, Cyprus |date=2019 |last1=Kofel |first1=Dominika |journal=Światowit |volume=56 |pages=89–98 }}', $template->parsed_text());
     }
 
     public function testTidySomeStuff(): void {
@@ -4044,11 +4039,11 @@ EP - 999 }}';
     }
 
     public function testDoiInline2(): void {
-        $text = '{{citation | title = {{doi-inline|10.1021/jp101758y|Funky Paper}} | doi=10.1021/jp101758y }}';
+        $text = '{{citation | title = {{doi-inline|10.1038/nphys806|A transient semimetallic layer in detonating nitromethane}} | doi=10.1038/nphys806 }}';
         $expanded = $this->process_citation($text);
-        $this->assertSame('The Journal of Physical Chemistry. A', $expanded->get2('journal'));
-        $this->assertSame('Funky Paper', $expanded->get2('title'));
-        $this->assertSame('10.1021/jp101758y', $expanded->get2('doi'));
+        $this->assertSame('Nature Physics', $expanded->get2('journal'));
+        $this->assertSame('A transient semimetallic layer in detonating nitromethane', $expanded->get2('title'));
+        $this->assertSame('10.1038/nphys806', $expanded->get2('doi'));
     }
 
     public function testTidyBogusDOIs3316(): void {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-require_once 'constants.php';      // @codeCoverageIgnore
-require_once 'user_messages.php';    // @codeCoverageIgnore
+require_once 'constants.php';     // @codeCoverageIgnore
+require_once 'user_messages.php'; // @codeCoverageIgnore
 require_once 'Template.php';      // @codeCoverageIgnore
-require_once 'NameTools.php';      // @codeCoverageIgnore
+require_once 'NameTools.php';     // @codeCoverageIgnore
 
 /** @param array<string> $pmids
     @param array<Template> $templates */
@@ -298,7 +298,7 @@ function arxiv_api(array $ids, array &$templates): void {  // Pointer to save me
                 $the_arxiv_title = $this_template->get('title');
                 $the_arxiv_contribution = $this_template->get('contribution');
                 if ($the_arxiv_contribution !== '') {
-                        $this_template->set('contribution', '');
+                    $this_template->set('contribution', '');
                 }
                 $this_template->set('title', '');
                 expand_by_doi($this_template);
@@ -460,8 +460,20 @@ function adsabs_api(array $ids, array &$templates, string $identifier): void {  
     }
     $unmatched_ids = array_udiff($ids, $matched_ids, 'strcasecmp');
     if (count($unmatched_ids)) {
-        report_warning("No match for bibcode identifier: " . echoable(implode('; ', $unmatched_ids)));  // @codeCoverageIgnore
-        bot_debug_log("No match for bibcode identifier: " . implode('; ', $unmatched_ids));    // @codeCoverageIgnore
+        foreach ($unmatched_ids as $bad_boy) {
+            if (preg_match('~^(\d{4}NatSR....)E(.....)$~i', $bad_boy, $match_bad)) {
+                $good_boy = $match_bad[1] . '.' . $match_bad[2];
+                foreach ($templates as $template) {
+                    if ($template->get('bibcode') === $bad_boy) {
+                        $template->set('bibcode', $good_boy);
+                    }
+                }
+            } else {
+                bot_debug_log("No match for bibcode identifier: " . $bad_boy);
+                report_warning("No match for bibcode identifier: " . $bad_boy);
+            }
+        }
+            
     }
     foreach ($templates as $template) {
         if ($template->blank(['year', 'date']) && preg_match('~^(\d{4}).*book.*$~', $template->get('bibcode'), $matches)) {
@@ -472,7 +484,7 @@ function adsabs_api(array $ids, array &$templates, string $identifier): void {  
 }
 
 /** @param array<string> $_ids
-        @param array<Template> $templates */
+    @param array<Template> $templates */
 function query_doi_api(array $_ids, array &$templates): void { // $id not used yet  // Pointer to save memory
     foreach ($templates as $template) {
         expand_by_doi($template);
@@ -482,13 +494,7 @@ function query_doi_api(array $_ids, array &$templates): void { // $id not used y
 
 function expand_by_doi(Template $template, bool $force = false): void {
     set_time_limit(120);
-    // Because it can recover rarely used parameters such as editors, series & isbn,
-    // there will be few instances where it could not in principle be profitable to
-    // run this function, so we don't check this first.
-
-    if (!$template->verify_doi()) {
-        return;
-    }
+    $template->verify_doi();  // Sometimes CrossRef has Data even when DOI is broken, so try CrossRef anyway even when return is false
     $doi = $template->get_without_comments_and_placeholders('doi');
     if ($doi === $template->last_searched_doi) {
         return;
@@ -497,8 +503,11 @@ function expand_by_doi(Template $template, bool $force = false): void {
     if (preg_match(REGEXP_DOI_ISSN_ONLY, $doi)) {
         return;
     }
+    if (isset(BAD_DOI_ARRAY[$doi])) { // Really bad ones that do not really exist at all
+        return;
+    }
     if ($doi && preg_match('~^10\.2307/(\d+)$~', $doi)) {
-            $template->add_if_new('jstor', substr($doi, 8));
+        $template->add_if_new('jstor', substr($doi, 8));
     }
     if ($doi && ($force || $template->incomplete())) {
         $crossRef = query_crossref($doi);
@@ -724,6 +733,7 @@ function expand_doi_with_dx(Template $template, string $doi): void {
     // Examples of DOI usage  https://www.doi.org/demos.html
     // This basically does this:
     // curl -LH "Accept: application/vnd.citationstyles.csl+json" https://dx.doi.org/10.5524/100077
+    // Data Quality is CrossRef > DX.doi.org > Zotero
     static $ch = null;
     if ($ch === null) {
     $ch = bot_curl_init(1.5,  // can take a long time when nothing to be found
@@ -758,6 +768,17 @@ function expand_doi_with_dx(Template $template, string $doi): void {
         }
         if (str_ends_with(strtolower($data), '.pdf')) {
             return;
+        }
+        if (strpos($name, 'author') !== false) { // Remove dates from names from 10.11501/ dois
+            if (preg_match('~^(.+), \d{3,4}\-\d{3,4}$~', $data, $matched)) {
+                $data = $matched[1];
+            }
+            if (preg_match('~^(.+), \d{3,4}\-$~', $data, $matched)) {
+                $data = $matched[1];
+            }
+            if (preg_match('~^(.+), \-\d{3,4}$~', $data, $matched)) {
+                $data = $matched[1];
+            }
         }
         $template->add_if_new($name, $data, 'dx');
         return;
@@ -925,16 +946,16 @@ function expand_by_jstor(Template $template): void {
     curl_setopt($ch, CURLOPT_URL, 'https://www.jstor.org/citation/ris/' . $jstor);
     $dat = bot_curl_exec($ch);
     if ($dat === '') {
-        report_info("JSTOR API returned nothing for ". jstor_link($jstor));      // @codeCoverageIgnore
-        return;                                                            // @codeCoverageIgnore
+        report_info("JSTOR API returned nothing for ". jstor_link($jstor)); // @codeCoverageIgnore
+        return;                                                             // @codeCoverageIgnore
     }
     if (stripos($dat, 'No RIS data found for') !== false) {
-        report_info("JSTOR API found nothing for ".    jstor_link($jstor));        // @codeCoverageIgnore
-        return;                                                            // @codeCoverageIgnore
+        report_info("JSTOR API found nothing for ".    jstor_link($jstor)); // @codeCoverageIgnore
+        return;                                                             // @codeCoverageIgnore
     }
     if (stripos($dat, 'Block Reference') !== false) {
-        report_info("JSTOR API blocked bot for ".    jstor_link($jstor));          // @codeCoverageIgnore
-        return;                                                            // @codeCoverageIgnore
+        report_info("JSTOR API blocked bot for ".    jstor_link($jstor)); // @codeCoverageIgnore
+        return;                                                           // @codeCoverageIgnore
     }
     if (stripos($dat, 'A problem occurred trying to deliver RIS data')  !== false) {
         report_info("JSTOR API had a problem for ".    jstor_link($jstor));
@@ -1062,29 +1083,28 @@ function ConvertS2CID_DOI(string $s2cid): string {
     curl_setopt($ch, CURLOPT_URL, $url);
     $response = bot_curl_exec($ch);
     if (!$response) {
-        report_warning("No response from semanticscholar.");    // @codeCoverageIgnore
+        report_warning("No response from semanticscholar.");  // @codeCoverageIgnore
         return '';                                            // @codeCoverageIgnore
     }
     $json = @json_decode($response);
     unset($response);
     if (!$json) {
-        report_warning("Bad response from semanticscholar.");    // @codeCoverageIgnore
+        report_warning("Bad response from semanticscholar."); // @codeCoverageIgnore
         return '';                                            // @codeCoverageIgnore
     }
     if (!isset($json->doi)) {
-        report_info("No doi found from semanticscholar.");    // @codeCoverageIgnore
-        return '';                                          // @codeCoverageIgnore
+        return '';                                         // @codeCoverageIgnore
     }
     if (is_array($json->doi) || is_object($json->doi)) {
-        report_warning("Bad data from semanticscholar.");    // @codeCoverageIgnore
+        report_warning("Bad data from semanticscholar."); // @codeCoverageIgnore
         return '';                                        // @codeCoverageIgnore
     }
     $doi = (string) $json->doi;
-    if (doi_active($doi) || doi_works($doi)) { // Try to fill both arrays now
+    if (doi_works($doi)) {
         return $doi;
     } else {
-        report_info("non-functional doi found from semanticscholar.");// @codeCoverageIgnore
-        return '';                                                  // @codeCoverageIgnore
+        report_info("non-functional doi found from semanticscholar: " . echoable_doi($doi));// @codeCoverageIgnore
+        return '';                                                    // @codeCoverageIgnore
     }
 }
 
@@ -1097,14 +1117,14 @@ function get_semanticscholar_license(string $s2cid): ?bool {
     curl_setopt($ch, CURLOPT_URL, $url);
     $response = bot_curl_exec($ch);
     if ($response === '') {
-        return null;
+        return null; // @codeCoverageIgnore
     }
     if (stripos($response, 'Paper not found') !== false) {
-        return false;
+        return false; // @codeCoverageIgnore
     }
     $oa = @json_decode($response);
     if ($oa === false) {
-        return null;
+        return null; // @codeCoverageIgnore
     }
     if (isset($oa->is_publisher_licensed) && $oa->is_publisher_licensed) {
         return true;
@@ -1249,7 +1269,7 @@ function Bibcode_Response_Processing(array $curl_opts, string $adsabs_url): obje
         $http_response_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $header_length = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         if ($http_response_code === 0 || $header_length === 0) {
-            throw new Exception('Size of zero from AdsAbs website');
+            throw new Exception('Size of zero from AdsAbs website'); // @codeCoverageIgnore
         }
         $header = substr($return, 0, $header_length);
         $body = substr($return, $header_length);
@@ -1334,12 +1354,17 @@ function Bibcode_Response_Processing(array $curl_opts, string $adsabs_url): obje
         }
 
         if (!is_object($decoded)) {
+            if (stripos($body, 'down for maintenance') !== false) {
+                AdsAbsControl::big_give_up();  // @codeCoverageIgnore
+                AdsAbsControl::small_give_up();  // @codeCoverageIgnore
+                throw new Exception("ADSABS is down for maintenance", 5000);  // @codeCoverageIgnore
+            }
             bot_debug_log("Could not decode ADSABS API response:\n" . $body . "\nURL was:    " . $adsabs_url);  // @codeCoverageIgnore
             throw new Exception("Could not decode API response:\n" . $body, 5000);  // @codeCoverageIgnore
         } elseif (isset($decoded->response)) {
             return $decoded->response;  /** NORMAL RETURN IS HIDDEN HERE */
-        } elseif (isset($decoded->error)) {                    // @codeCoverageIgnore
-            throw new Exception("" . $decoded->error, 5000);    // @codeCoverageIgnore
+        } elseif (isset($decoded->error)) {                  // @codeCoverageIgnore
+            throw new Exception('' . $decoded->error, 5000); // @codeCoverageIgnore
         } else {
             throw new Exception("Could not decode AdsAbs response", 5000);        // @codeCoverageIgnore
         }
@@ -1523,7 +1548,7 @@ function query_adsabs(string $options): object {
         return (object) ['numFound' => 0];
     }
     if (!PHP_ADSABSAPIKEY) {
-        return (object) ['numFound' => 0];
+        return (object) ['numFound' => 0]; // @codeCoverageIgnore
     }
     $adsabs_url = "https://" . (TRAVIS ? 'qa' : 'api')
                     . ".adsabs.harvard.edu/v1/search/query"
@@ -1556,7 +1581,7 @@ function CrossRefTitle(string $doi): string {
         }
         return str_ireplace(['<i>', '</i>', '</i> :', '  '], [' <i>', '</i> ', '</i>:', ' '], $title);
     } else {
-        sleep(2);    // @codeCoverageIgnore
+        sleep(2);  // @codeCoverageIgnore
         return ''; // @codeCoverageIgnore
     }
 }

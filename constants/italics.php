@@ -122,6 +122,7 @@ const ITALICS_LIST =
     'Mycoplasma pneumoniae|' .
     'Paradisaea Raggiana|' .
     'Rothia mucilaginosa|' .
+    'Mitragyna speciosain|' .
     'Brachiosaurus altithorax|' .
     'Saccharomyces cerevisiae|' .
     'Plutella xylostella|' .
@@ -213,6 +214,7 @@ const ITALICS_LIST =
     'Poria cocos|' .
     'Emiliania huxleyi|' .
     'Res Publica|' .
+    'Mimulus peregrinus|' .
     'Mixosaurus nordenskioeldii|' .
     'Streptococcus agalactiae|' .
     'Mycoplasma genitalium|' .
@@ -241,6 +243,9 @@ const ITALICS_LIST =
     'Papilio memnon|' .
     'Loa loa|' .
     'Ixodes scapularis|' .
+    'Bishara backa|' .
+    'Shipingia luchangensis|' .
+    'Eosuchus lerichei|' .
     'Homo nalediin|' .
     'Homo naledi|' .
     'Kallima inachus|' .
@@ -314,11 +319,13 @@ const ITALICS_LIST =
     'Bachitherium|' .
     'Anoplotherium|' .
     'Saltatorellota|' .
+    'Acanthodes|' .
     'Adenanthos|' .
     'Thraustochytrium|' .
     'Rhaponticum|' .
     'Luzula|' .
     'Arthropleura|' .
+    'Paraprefica|' .
     'Leuzea|' .
     'Ureaplasma|' .
     'Euschistus|' .
@@ -327,6 +334,8 @@ const ITALICS_LIST =
     'Boreogomphodon|' .
     'Noideattella|' .
     'Tolegnaro|' .
+    'Agnathus|' .
+    'Strophodus|' .
     'Cannabis|' .
     'Drosophila|' .
     'Duyfken|' .
@@ -405,6 +414,9 @@ const ITALICS_LIST =
     'Phymatoderma|' .
     'Allopanax|' .
     'Boreopanax|' .
+    'Accipiter|' .
+    'Santacruzodon|' .
+    'Escherichia|' .
     'END_OF_CITE_list_junk';
 //  All real ones need pipe on end
 //  YOU MUST ESCAPE (.|) and other FUNNY Characters
@@ -522,7 +534,11 @@ const CAMEL_CASE = [
     'JEvTrace', 'mProphet', 'siDirect', 'BioRxiv', 'InfoStation',
     'MicroFinance', 'DeFi', 'JetBlue', 'PacBio', 'MetroLivEnv', 'WorldMinds',
     'SmartCloud', 'DiCaprio', 'LaNada', 'BioCassava', 'ResFinder',
-    'HyperRhetoric', 'HflXr',
+    'HyperRhetoric', 'HflXr', 'SteamBioAfrica', 'MindSpore', 'MathJax',
+    'poreCov', 'PyArmadillo', 'QuasiFlow', 'RustBelt', 'AutoDock', 'TractoFlow',
+    'libRoadRunner', 'pyJac', 'myGrid', 'Cp2TiCl', 'myExperiment',
+    'CicArVarDB', 'InDel database', 'BioMoby', 'maxdBrowse', 'GazePlotter',
+    'ScanGraph', 'MusicBrainz', 'WontBe', 'InChIs', 'PolyChord',
 ];
 
 const ITALICS_HARDCODE_IN  = [

@@ -102,8 +102,10 @@ final class WikipediaBot {
                 report_warning('Invalid CSRF token - probably bot edit conflict with itself.  Will sleep and move on');  // @codeCoverageIgnore
             } elseif (strpos($respone_info, 'Bad title') !== false) {
                 report_warning('Bad title error - You probably did a category as a page or pasted invisible characters or some other typo.  Will sleep and move on');  // @codeCoverageIgnore
-            } elseif (strpos($respone_info, "The page you specified doesn't exist") !== false) {
+            } elseif (strpos($respone_info, "The page you specified does not exist") !== false) {
                 report_warning('Bad title error - This page does not exist.  Will sleep and move on');  // @codeCoverageIgnore
+            } elseif (strpos($respone_info, "The page you specified doesn") !== false) {
+                report_warning('Bad title error - This page does not exist.  Will sleep and move on');  // @codeCoverageIgnore  
             } else {
                 $err_string = 'API call failed for unexpected reason.  Will sleep and move on: ' . echoable($respone_info);
                 bot_debug_log($err_string); // Good to know about about these things
@@ -121,10 +123,10 @@ final class WikipediaBot {
     private function fetch(array $params, int $depth = 1): ?object {
         set_time_limit(120);
         if ($depth > 1) {
-            sleep($depth+2);
+            sleep($depth+2); // @codeCoverageIgnore
         }
         if ($depth > 4) {
-            return null;
+            return null;  // @codeCoverageIgnore
         }
         $params['format'] = 'json';
 
@@ -192,7 +194,7 @@ final class WikipediaBot {
 
         $myPage = self::response2page($response);
         if ($myPage === null) {
-            return false;
+            return false;  // @codeCoverageIgnore
         }
 
         $baseTimeStamp = (string) $myPage->revisions[0]->timestamp;
@@ -234,7 +236,7 @@ final class WikipediaBot {
         $result = $this->fetch($submit_vars);
 
         if (!self::resultsGood($result)) {
-            return false;
+            return false;  // @codeCoverageIgnore
         }
 
         if (HTML_OUTPUT) {
@@ -291,8 +293,8 @@ final class WikipediaBot {
                            str_replace(["You ", " have "], ["This bot ", " has "],
                            echoable((string) @$result->error->info)));
             return false;
-        } elseif (isset($result->edit->captcha)) {  // Bot account has flags set on en.wikipedia.org and simple.wikipedia.org to avoid captchas
-            report_error("Write error: We encountered a captcha, so can't be properly logged in.");  // @codeCoverageIgnore
+        } elseif (isset($result->edit->captcha)) {
+            report_error("Write error: We encountered a captcha, so the bot cannot be properly logged in.");  // @codeCoverageIgnore
         } elseif (empty($result->edit->result)) { // Includes results === null
             report_warning("Unhandled write error.  Please copy this output and " .
                            "<a href='https://en.wikipedia.org/wiki/User_talk:Citation_bot'>" .
@@ -310,7 +312,7 @@ final class WikipediaBot {
     public static function category_members(string $cat): array {
         $list = [];
         $vars = [
-            "cmtitle" => "Category:{$cat}", // Don't urlencode.
+            "cmtitle" => "Category:{$cat}", // Do not urlencode.
             "action" => "query",
             "cmlimit" => "500",
             "list" => "categorymembers",
@@ -476,7 +478,7 @@ final class WikipediaBot {
             $response = self::QueryAPI($query);
         }
         if ($response === '') {
-            return false;
+            return false;  // @codeCoverageIgnore
         }
         $response = str_replace(["\r", "\n"], '', $response);  // paranoid
         if (strpos($response, '"invalid"') !== false || // IP Address and similar stuff

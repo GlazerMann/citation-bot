@@ -47,7 +47,7 @@ abstract class testBaseClass extends PHPUnit\Framework\TestCase {
              $this->testing_skip_bibcode = false;
         }
         if (!getenv('PHP_OAUTH_CONSUMER_TOKEN') || !getenv('PHP_OAUTH_CONSUMER_SECRET') ||
-                !getenv('PHP_OAUTH_ACCESS_TOKEN')       || !getenv('PHP_OAUTH_ACCESS_SECRET')) {
+                !getenv('PHP_OAUTH_ACCESS_TOKEN') || !getenv('PHP_OAUTH_ACCESS_SECRET')) {
              $this->testing_skip_wiki = true;
         } else {
              $this->testing_skip_wiki = false;
@@ -96,20 +96,20 @@ abstract class testBaseClass extends PHPUnit\Framework\TestCase {
 
     // Speeds up non-zotero tests
     protected function requires_zotero(callable $function): void {
-            try {
-                usleep(300000); // Reduce failures
-                Zotero::unblock_zotero();
-                $function();
-            } finally {
-                Zotero::block_zotero();
-            }
+        try {
+            usleep(300000); // Reduce failures
+            Zotero::unblock_zotero();
+            $function();
+        } finally {
+            Zotero::block_zotero();
+        }
     }
 
     protected function make_citation(string $text): Template {
         $tp = new TestPage(); unset($tp); // Fill page name with test name for debugging
         $this->flush();
         Template::$all_templates = [];
-        Template::$date_style = DATES_WHATEVER;
+        Template::$date_style = DateStyle::DATES_WHATEVER;
         $this->assertSame('{{', mb_substr($text, 0, 2));
         $this->assertSame('}}', mb_substr($text, -2));
         $template = new Template();
@@ -134,7 +134,7 @@ abstract class testBaseClass extends PHPUnit\Framework\TestCase {
     protected function process_page(string $text): TestPage { // Only used if more than just a citation template
         $this->flush();
         Template::$all_templates = [];
-        Template::$date_style = DATES_WHATEVER;
+        Template::$date_style = DateStyle::DATES_WHATEVER;
         $page = new TestPage();
         $page->parse_text($text);
         $page->expand_text();
@@ -179,11 +179,14 @@ abstract class testBaseClass extends PHPUnit\Framework\TestCase {
     }
 
     protected function flush(): void {
-         if (ob_get_level() > 0) { 
-             ob_end_flush();
-             ob_start();
-         }
-         flush();
+        $level = ob_get_level();
+        for ($count = 0; $count < $level; $count++) {
+            ob_end_flush();
+        }
+        flush();
+        for ($count = 0; $count < $level; $count++) {
+            ob_start();
+        }
     }
 
     protected function fill_cache(): void { // Name is outdated

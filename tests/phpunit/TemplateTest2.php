@@ -904,23 +904,26 @@ final class TemplateTest2 extends testBaseClass {
     public function testArchiveDate(): void {
         $text = "{{cite journal}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_MDY;
+        Template::$date_style = DateStyle::DATES_MDY;
         $this->assertTrue($template->add_if_new('archive-date', '20 JAN 2010'));
         $this->assertSame('January 20, 2010', $template->get2('archive-date'));
         $text = "{{cite journal}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_DMY;
+        Template::$date_style = DateStyle::DATES_DMY;
         $this->assertTrue($template->add_if_new('archive-date', '20 JAN 2010'));
         $this->assertSame('20 January 2010', $template->get2('archive-date'));
         $text = "{{cite journal}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_WHATEVER;
+        Template::$date_style = DateStyle::DATES_WHATEVER;
         $this->assertTrue($template->add_if_new('archive-date', '20 JAN 2010'));
-        $this->assertSame('20 JAN 2010', $template->get2('archive-date'));
+        $this->assertSame('20 January 2010', $template->get2('archive-date'));
         $text = "{{cite journal}}";
         $template = $this->make_citation($text);
         $this->assertFalse($template->add_if_new('archive-date', 'SDAFEWFEWW#F#WFWEFESFEFSDFDFD'));
         $this->assertNull($template->get2('archive-date'));
+        Template::$date_style = DateStyle::DATES_ISO;
+        $this->assertTrue($template->add_if_new('archive-date', '20 JAN 2010'));
+        $this->assertSame('2010-01-20', $template->get2('archive-date'));
     }
 
     public function testIssuesOnly(): void {
@@ -932,7 +935,7 @@ final class TemplateTest2 extends testBaseClass {
     public function testAccessDate1(): void {
         $text = "{{cite journal|url=XXX}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_MDY;
+        Template::$date_style = DateStyle::DATES_MDY;
         $this->assertTrue($template->add_if_new('access-date', '20 JAN 2010'));
         $this->assertSame('January 20, 2010', $template->get2('access-date'));
     }
@@ -940,7 +943,7 @@ final class TemplateTest2 extends testBaseClass {
     public function testAccessDate2(): void {
         $text = "{{cite journal|url=XXX}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_DMY;
+        Template::$date_style = DateStyle::DATES_DMY;
         $this->assertTrue($template->add_if_new('access-date', '20 JAN 2010'));
         $this->assertSame('20 January 2010', $template->get2('access-date'));
     }
@@ -948,9 +951,9 @@ final class TemplateTest2 extends testBaseClass {
     public function testAccessDate3(): void {
         $text = "{{cite journal|url=XXX}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_WHATEVER;
+        Template::$date_style = DateStyle::DATES_WHATEVER;
         $this->assertTrue($template->add_if_new('access-date', '20 JAN 2010'));
-        $this->assertSame('20 JAN 2010', $template->get2('access-date'));
+        $this->assertSame('20 January 2010', $template->get2('access-date'));
     }
 
     public function testAccessDate4(): void {
@@ -1173,13 +1176,13 @@ final class TemplateTest2 extends testBaseClass {
         $text = "{{cite journal|doi=10.0000/Rubbish_bot_failure_test}}";
         $template = $this->make_citation($text);
         $this->assertTrue($template->add_if_new('doi-broken-date', '1 DEC 2019'));
-        $this->assertSame('1 DEC 2019', $template->get2('doi-broken-date'));
+        $this->assertSame('1 December 2019', $template->get2('doi-broken-date'));
     }
 
     public function testAddBrokenDateFormat2(): void {
         $text = "{{cite journal|doi=10.0000/Rubbish_bot_failure_test}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_MDY;
+        Template::$date_style = DateStyle::DATES_MDY;
         $this->assertTrue($template->add_if_new('doi-broken-date', '1 DEC 2019'));
         $this->assertSame('December 1, 2019', $template->get2('doi-broken-date'));
     }
@@ -1187,7 +1190,7 @@ final class TemplateTest2 extends testBaseClass {
     public function testAddBrokenDateFormat3(): void {
         $text = "{{cite journal|doi=10.0000/Rubbish_bot_failure_test}}";
         $template = $this->make_citation($text);
-        Template::$date_style = DATES_DMY;
+        Template::$date_style = DateStyle::DATES_DMY;
         $this->assertTrue($template->add_if_new('doi-broken-date', '1 DEC 2019'));
         $this->assertSame('1 December 2019', $template->get2('doi-broken-date'));
     }
@@ -2790,7 +2793,7 @@ final class TemplateTest2 extends testBaseClass {
             $this->assertFalse($template->get_identifiers_from_url()); // false because we add no parameters or such
             $this->assertSame('http://www.cap.ca/en/', $template->get2('url'));
             $this->assertSame('https://web.archive.org/web/20111030210210/http://www.cap.ca/en/', $template->get2('archive-url'));
-            $this->assertSame('2011-10-30', $template->get2('archive-date'));
+            $this->assertSame('30 October 2011', $template->get2('archive-date'));
         }
 
         public function testCAPSGoingAway1(): void {
@@ -3180,15 +3183,15 @@ final class TemplateTest2 extends testBaseClass {
         public function testDateStyles(): void {
             $text = '{{cite web}}';
             $template = $this->make_citation($text);
-            Template::$date_style = DATES_MDY;
+            Template::$date_style = DateStyle::DATES_MDY;
             $template->add_if_new('date', '12-02-2019');
             $this->assertSame('February 12, 2019', $template->get2('date'));
             $template = $this->make_citation($text);
-            Template::$date_style = DATES_DMY;
+            Template::$date_style = DateStyle::DATES_DMY;
             $template->add_if_new('date', '12-02-2019');
             $this->assertSame('12 February 2019', $template->get2('date'));
             $template = $this->make_citation($text);
-            Template::$date_style = DATES_WHATEVER;
+            Template::$date_style = DateStyle::DATES_WHATEVER;
             $template->add_if_new('date', '12-02-2019');
             $this->assertSame('12-02-2019', $template->get2('date'));
         }

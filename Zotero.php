@@ -2,12 +2,13 @@
 
 declare(strict_types=1);
 
-require_once 'constants.php';  // @codeCoverageIgnore
+require_once 'constants.php'; // @codeCoverageIgnore
 require_once 'Template.php';  // @codeCoverageIgnore
 
 const MAGIC_STRING_URLS = 'CITATION_BOT_PLACEHOLDER_URL_POINTER_';
 const CITOID_ZOTERO = "https://en.wikipedia.org/api/rest_v1/data/citation/zotero/";
-
+const THESIS_TYPES = ['PhD', 'MS', 'MA', 'MFA', 'MBA', 'EdD', 'BSN', 'DMin', 'DDiv'];
+const BAD_URL_STATUS = ['usurped', 'unfit', 'dead', 'deviated'];
 /**
     @param array<string> $_ids
     @param array<Template> $templates
@@ -43,7 +44,7 @@ final class Zotero {
         }
         self::$zotero_ch = bot_curl_init($time, [
             CURLOPT_URL => CITOID_ZOTERO,
-            CURLOPT_HTTPHEADER => ['accept: application/json; charset=utf-8', 'Accept-Language: en-US,en', 'Cache-Control: no-cache, must-revalidate'],
+            CURLOPT_HTTPHEADER => ['accept: application/json; charset=utf-8', 'Accept-Language: en-US,en,en-GB,en-CA', 'Cache-Control: no-cache, must-revalidate'],
         ]);
 
         self::$ch_ieee = bot_curl_init($time, [CURLOPT_USERAGENT => 'curl']); // IEEE requires JavaScript, unless curl is specified
@@ -84,7 +85,7 @@ final class Zotero {
         }
 
         if (!SLOW_MODE) {
-            return; // Zotero takes time
+            return; // @codeCoverageIgnore
         }
 
         self::$zotero_announced = 1;
@@ -256,10 +257,10 @@ final class Zotero {
                     if (strlen($ch_return) > 50) { // Avoid bogus tiny pages
                         $redirectedUrl_doi = curl_getinfo(self::$ch_dx, CURLINFO_EFFECTIVE_URL); // Final URL
                         if (stripos($redirectedUrl_doi, 'cookie') !== false) {
-                            break;
+                            break; // @codeCoverageIgnore
                         }
                         if (stripos($redirectedUrl_doi, 'denied') !== false) {
-                            break;
+                            break; // @codeCoverageIgnore
                         }
                         $redirectedUrl_doi = self::url_simplify($redirectedUrl_doi);
                         $url_short = self::url_simplify($url);
@@ -304,7 +305,7 @@ final class Zotero {
         if (self::$zotero_failures_count > self::ZOTERO_GIVE_UP) {
             self::$zotero_failures_count -= 1;
             if (self::$zotero_failures_count === self::ZOTERO_GIVE_UP) {
-                self::$zotero_failures_count = 0;
+                self::$zotero_failures_count = 0; // @codeCoverageIgnore
             }
         }
 
@@ -342,7 +343,7 @@ final class Zotero {
     public static function expand_by_zotero(Template $template, ?string $url = null): void {
         $access_date = 0;
         if (is_null($url)) {
-            if (in_array($template->get('url-status'), ['usurped', 'unfit', 'dead', 'deviated'], true)) {
+            if (in_array($template->get('url-status'), BAD_URL_STATUS, true)) {
                 return;
             }
             $access_date = (int) strtotime(tidy_date($template->get('accessdate') . ' ' . $template->get('access-date')));
@@ -516,13 +517,20 @@ final class Zotero {
         unset($result->language);
         unset($result->source);
 
-        if (stripos($url, 'www.royal.uk') !== false) {
+        if (isset($result->publicationTitle) && substr($result->publicationTitle, -2) === " |") {
+            $result->publicationTitle = substr($result->publicationTitle, 0, -2);
+        }
+        if (stripos($url, 'www.royal.uk') !== false || stripos($url, 'astanatimes.com') !== false) {
             unset($result->creators);  // @codeCoverageIgnore
             unset($result->author);   // @codeCoverageIgnore
         }
 
         if (stripos($url, 'theathletic.com') !== false) { // Returns NYT
             unset($result->publicationTitle);  // @codeCoverageIgnore
+        }
+
+        if (stripos($url, '/x.com') !== false || stripos($url, 'twitter.com') !== false) {
+            $result->itemType = 'webpage';   // @codeCoverageIgnore
         }
 
         if (stripos($url, 'newrepublic.com') !== false) { // Bad data for all but first one
@@ -545,7 +553,12 @@ final class Zotero {
         }
         if (stripos($url, 'tumblr.com') !== false) {
             $result->itemType = 'webpage';  // @codeCoverageIgnore
-        }     
+        }
+        if (stripos($url, 'tate.org.uk') !== false) {
+            $result->itemType = 'webpage';
+            unset($result->creators);
+            unset($result->author);
+        }
         
         // Reject if we find more than 5 or more than 10% of the characters are �. This means that character
         // set was not correct in Zotero and nothing is good.  We allow a couple of � for German umlauts that arer easily fixable by humans.
@@ -627,6 +640,15 @@ final class Zotero {
                 unset($result->issue);
                 unset($result->volume);
                 unset($result->pages);
+                unset($result->publicationTitle);
+            }
+        }
+
+        // Ignore junk website names
+        if (isset($result->publicationTitle) && preg_match('~^https?://([^/]+)~', $url, $hostname) === 1) {
+            $hostname = str_ireplace('www.', '', (string) $hostname[1]);
+            $pub_name = str_ireplace('www.', '', (string) $result->publicationTitle);
+            if (str_i_same($pub_name, $hostname)) {
                 unset($result->publicationTitle);
             }
         }
@@ -902,8 +924,19 @@ final class Zotero {
                 $new_title = (string) $result->publicationTitle;
                 if (in_array(strtolower($new_title), WORKS_ARE_PUBLISHERS, true)) {
                     $template->add_if_new('publisher', $new_title);
+                } elseif ($template->blank(WORK_ALIASES)) {
+                    $template->add_if_new('work', $new_title);
                 } else {
-                    $template->add_if_new('newspaper', $new_title);
+                    $use_it = false;
+                    foreach (WORK_ALIASES as $work_type) {
+                        $test_it = substr($template->get($work_type), -4);
+                        if (str_i_same($test_it, '.com') || str_i_same($test_it, '.org') || str_i_same($test_it, '.net')) {
+                            $use_it = true;
+                        }
+                    }
+                    if ($use_it) {
+                        $template->add_if_new('work', $new_title);
+                    }
                 }
             }
         } else {
@@ -912,7 +945,14 @@ final class Zotero {
                     (stripos((string) $result->publicationTitle, ' edition') === false)) { // Do not add if "journal" includes "edition"
                     if (str_replace(NON_JOURNALS, '', (string) $result->publicationTitle) === (string) $result->publicationTitle) {
                         if (str_ireplace(NON_JOURNAL_WEBSITES, '', $url) === $url || $template->wikiname() === 'cite journal') {
-                            $template->add_if_new('journal', (string) $result->publicationTitle);
+                            if (str_ireplace(CANONICAL_PUBLISHER_URLS, '', $url) === $url && str_ireplace(JOURNAL_ARCHIVES_SITES, '', $url) === $url) {
+                                if ($url !== '' && strpos($url, 'dx.doi.org') === FALSE && $url !== 'X') { // '' and 'X" are only in test suite
+                                    bot_debug_log('Possible journal URL: ' . $url);
+                                }
+                                $template->add_if_new('work', (string) $result->publicationTitle);
+                            } else {
+                                $template->add_if_new('journal', (string) $result->publicationTitle);
+                            }
                         } else {
                             $template->add_if_new('work', (string) $result->publicationTitle);
                         }
@@ -1010,16 +1050,16 @@ final class Zotero {
                         $template->change_name_to('cite magazine');
                     }
                     break;
-                case 'newspaperArticle':
-                    if ($template->wikiname() === 'cite web') {
+                case 'newspaperArticle':  // Many things get called "news" in error
+                    /** if ($template->wikiname() === 'cite web') {
                         $test_data = $template->get('work') . $template->get('website') .
                             $template->get('url') . $template->get('chapter-url') .
                             $template->get('title') . $template->get('encyclopedia') .
-                            $template->get('encyclopædia') . $url; // Some things get called "news" in error
+                            $template->get('encyclopædia') . $url;
                         if (str_ireplace(['.gov', 'encyclopedia', 'encyclopædia'], '', $test_data) === $test_data) {
                             $template->change_name_to('cite news');
                         }
-                    }
+                    } **/
                     break;
                 case 'thesis':
                     $template->change_name_to('cite thesis');
@@ -1029,7 +1069,7 @@ final class Zotero {
                     if (isset($result->thesisType) && $template->blank(['type', 'medium', 'degree'])) {
                         $type = (string) $result->thesisType;
                         $type = str_replace('.', '', $type);
-                        if (in_array($type, ['PhD', 'MS', 'MA', 'MFA', 'MBA', 'EdD', 'BSN', 'DMin', 'DDiv'])) {
+                        if (in_array($type, THESIS_TYPES, true)) {
                             $template->add_if_new('type', $type); // Prefer type since it exists in cite journal too
                         }
                     }
@@ -2067,7 +2107,7 @@ final class Zotero {
                     return true;
                 }
             /// THIS MUST BE LAST
-            } elseif (($template->has('chapterurl') || $template->has('chapter-url') || $template->has('url') || ($url_type === 'url') || ($url_type === 'chapterurl') || ($url_type === 'chapter-url')) && preg_match("~^https?://web\.archive\.org/web/\d{14}/(https?://.*)$~", $url, $match) && $template->blank(['archiveurl', 'archive-url'])) {
+            } elseif (($template->has('chapterurl') || $template->has('chapter-url') || $template->has('url') || ($url_type === 'url') || ($url_type === 'chapterurl') || ($url_type === 'chapter-url')) && preg_match("~^https?://web\.archive\.org/web/\d{14}(?:|fw_)/(https?://.*)$~", $url, $match) && $template->blank(['archiveurl', 'archive-url'])) {
                 if (is_null($url_sent)) {
                     quietly('report_modification', 'Extracting URL from archive');
                     $template->set($url_type, $match[1]);

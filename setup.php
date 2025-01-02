@@ -25,26 +25,41 @@ if (file_exists('git_pull.lock')) {
  */
 
 function bot_debug_log(string $log_this): void {
-    @clearstatcache(); // Deal with multiple writers, but not so paranoid that we get a file lock
     if (function_exists('echoable')) {
         // Avoid making a new huge string, so do not combine
-        file_put_contents('CodeCoverage', echoable(WikipediaBot::GetLastUser()) . " :: " . echoable(Page::$last_title) . " :: ", FILE_APPEND);
-        file_put_contents('CodeCoverage', $log_this, FILE_APPEND);
-        file_put_contents('CodeCoverage', "\n", FILE_APPEND);
+        if (defined('WIKI_BASE')) {
+            $base = WIKI_BASE;
+        } else {
+            $base = "  ";
+        }
+        @clearstatcache(); // Deal with multiple writers, but not so paranoid that we get a file lock
+        // Do all at once to avoid spreading over lines in file
+        file_put_contents('CodeCoverage', $base . ' :: ' . echoable(WikipediaBot::GetLastUser()) . " :: " . echoable(Page::$last_title) . " :: " . $log_this . "\n", FILE_APPEND);
     }
 }
 
+// Bot account has flags set to avoid captchas.  Having an account is not enough. https://en.wikipedia.org/wiki/Special:CentralAuth/Citation_bot
+// Should add all these to index.html web interface
+// Might need to translate the messages in constants/translations.php and must add to Page->edit_summary() list
 if (isset($_REQUEST["wiki_base"])){
     $wiki_base = trim((string) $_REQUEST["wiki_base"]);
-    if (!in_array($wiki_base, ['en', 'simple'], true)) {
+    if (!in_array($wiki_base, ['en', 'simple', 'mk', 'ru', 'mdwiki'], true)) {
         echo '<!DOCTYPE html><html lang="en" dir="ltr"><head><title>Citation Bot: error</title></head><body><h1>Unsupported wiki requested - aborting</h1></body></html>';
         exit;
     }
 } else {
     $wiki_base = 'en';
 }
-define("WIKI_ROOT", 'https://'. $wiki_base . '.wikipedia.org/w/index.php');
-define("API_ROOT", 'https://'. $wiki_base . '.wikipedia.org/w/api.php');
+if ($wiki_base === 'mdwiki') {
+    define('WIKI_ROOT', 'https://mdwiki.org/w/index.php');
+    define('API_ROOT', 'https://mdwiki.org/w/api.php');
+    define('WIKI_BASE', 'mdwiki');
+    define('EDIT_AS_USER', true); // TODO - does this work?
+} else {
+    define('WIKI_ROOT', 'https://'. $wiki_base . '.wikipedia.org/w/index.php');
+    define('API_ROOT', 'https://'. $wiki_base . '.wikipedia.org/w/api.php');
+    define('WIKI_BASE', $wiki_base);
+}
 unset($wiki_base);
 
 require_once 'constants.php';
@@ -148,7 +163,7 @@ unset($nlm_email, $nlm_apikey, $nlm_tool);
 
 function check_blocked(): void {
     if (!TRAVIS && ! WikipediaBot::is_valid_user('Citation_bot')) {
-        echo '</pre><div style="text-align:center"><h1>The Citation Bot is currently blocked because of disagreement over its usage.</h1><br/><h2><a href="https://en.wikipedia.org/wiki/User_talk:Citation_bot" title="Join the discussion" target="_blank"  aria-label="Join the discussion (opens a new window)">Please join in the discussion</a></h2></div><footer><a href="./" title="Use Citation Bot again">Another&nbsp;page</a>?</footer></body></html>';
+        echo '</pre><div style="text-align:center"><h1>The Citation Bot is currently blocked because of disagreement over its usage.</h1><br/><h1>Or, the bot is not enabled on this wiki fully.</h1><h2><a href="https://en.wikipedia.org/wiki/User_talk:Citation_bot" title="Join the discussion" target="_blank"  aria-label="Join the discussion (opens a new window)">Please join in the discussion</a></h2></div><footer><a href="./" title="Use Citation Bot again">Another&nbsp;page</a>?</footer></body></html>';
         exit;
     }
 }

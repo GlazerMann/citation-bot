@@ -17,13 +17,16 @@ require_once 'user_messages.php'; // @codeCoverageIgnore
 require_once 'Zotero.php';        // @codeCoverageIgnore
 require_once 'constants.php';     // @codeCoverageIgnore
 
+const UNPROTECTED_PAGE = ["autoconfirmed", "extendedconfirmed", "editautoreviewprotected"];
+const PROTECTED_PAGE = ["sysop", "templateeditor"];
+
 class Page {
     protected string $text = '';
     protected string $title = '';
     /** @var array<bool|array<string>> $modifications */
     private array $modifications = [];
-    private int $date_style = DATES_WHATEVER;
-    private int $name_list_style = NAME_LIST_STYLE_DEFAULT;
+    private DateStyle $date_style = DateStyle::DATES_WHATEVER;
+    private VancStyle $name_list_style = VancStyle::NAME_LIST_STYLE_DEFAULT;
     private string $read_at = '';
     private string $start_text = '';
     private int $lastrevid = 0;
@@ -35,7 +38,7 @@ class Page {
         $this->construct_modifications_array();
         if (!self::$told_fast) {
             if (!SLOW_MODE) {
-                report_info("Will skip the search for new bibcodes and the expanding of URLS in non-slow mode");
+                report_info("Will skip the search for new bibcodes and the expanding of URLS in non-slow mode"); // @codeCoverageIgnore
             }
             self::$told_fast = true;
         }
@@ -78,7 +81,7 @@ class Page {
 
         if (!isset($details->title)) {
             report_warning("Could not even get the page title.");   // @codeCoverageIgnore
-            return false;                                                                                   // @codeCoverageIgnore
+            return false;                                           // @codeCoverageIgnore
         }
 
         if (!empty($details->protection)) {
@@ -87,9 +90,9 @@ class Page {
             foreach ($the_protections as $protects) {
                 if (isset($protects->type) && (string) $protects->type === "edit" && isset($protects->level)) {
                     $the_level = (string) $protects->level;
-                    if (in_array($the_level, ["autoconfirmed", "extendedconfirmed"], true)) {
+                    if (in_array($the_level, UNPROTECTED_PAGE, true)) {
                         // We are good
-                    } elseif (in_array($the_level, ["sysop", "templateeditor"], true)) {
+                    } elseif (in_array($the_level, PROTECTED_PAGE, true)) {
                         report_warning("Page is protected.");
                         return false;
                     } else {
@@ -106,8 +109,8 @@ class Page {
         $this->text = WikipediaBot::GetAPage($title);
 
         if ($this->text === '') {
-            report_warning('Page '   . echoable($title) . ' from ' . str_replace(['/w/index.php', 'https://'], ['',''], WIKI_ROOT) . ' appears to be empty '); // @codeCoverageIgnore
-            return false;                                                                                                                                                   // @codeCoverageIgnore
+            report_warning('Page ' . echoable($title) . ' from ' . str_replace(['/w/index.php', 'https://'], ['',''], WIKI_ROOT) . ' appears to be empty '); // @codeCoverageIgnore
+            return false;                                                                                                                                    // @codeCoverageIgnore
         }
         $this->start_text = $this->text;
         $this->set_date_pattern();
@@ -352,9 +355,6 @@ class Page {
                 $this_template->tidy();
                 $this_template->tidy_parameter('dead-url');
                 $this_template->tidy_parameter('deadurl');
-                if ($this_template->wikiname() === 'cite conference') {
-                    $our_templates_conferences[] = $this_template;
-                }
                 $our_templates_ieee[] = $this_template;
             } elseif (in_array($this_template->wikiname(), TEMPLATES_WE_BARELY_PROCESS, true)) { // No capitalization of thesis, etc.
                 $our_templates_slight[] = $this_template;
@@ -364,6 +364,9 @@ class Page {
                 $this_template->tidy();
                 $this_template->tidy_parameter('dead-url');
                 $this_template->tidy_parameter('deadurl');
+                if ($this_template->wikiname() === 'cite conference') {
+                    $our_templates_conferences[] = $this_template;
+                }                                                                               
             } elseif (in_array($this_template->wikiname(), TEMPLATES_WE_CHAPTER_URL, true)) {
                 $our_templates_slight[] = $this_template;
                 $this_template->rename('chapterurl', 'chapter-url');
@@ -420,7 +423,8 @@ class Page {
             }
             if ($this_template->has('url')) {
                 $the_url = $this_template->get('url');
-                $new_url = str_ireplace(['nytimes.com', 'mdpi.com', 'frontiersin.org', 'plos.org', 'sciencedirect.com', 'onlinelibrary.wiley.com'], '', $the_url); // TODO - add more "blessed" hosts that probably should not be cite news
+                // TODO - add more "blessed" hosts that probably should not be cite news OR have good Zotero translators
+                $new_url = str_ireplace(['bangkokpost.com', 'nytimes.com', 'mdpi.com', 'frontiersin.org', 'plos.org', 'sciencedirect.com', 'onlinelibrary.wiley.com'], '', $the_url);
                 if (($the_url !== $new_url) || $this_template->blank('title') || ($this_template->has('via') && $this_template->blank(WORK_ALIASES))) {
                      $array_of_template = [$this_template];
                      $this->expand_templates_from_identifier('url', $array_of_template);
@@ -528,8 +532,8 @@ class Page {
         $this->replace_object($all_templates);
         // remove circular memory reference that makes garbage collection harder and reset
         Template::$all_templates = [];
-        Template::$date_style = DATES_WHATEVER;
-        Template::$name_list_style = NAME_LIST_STYLE_DEFAULT;
+        Template::$date_style = DateStyle::DATES_WHATEVER;
+        Template::$name_list_style = VancStyle::NAME_LIST_STYLE_DEFAULT;
         unset($all_templates);
 
         $this->text = safe_preg_replace('~(\{\{[Cc]ite ODNB\s*\|[^\{\}\_]+_?[^\{\}\_]+\}\}\s*)\{\{ODNBsub\}\}~u', '$1', $this->text); // Allow only one underscore to shield us from MATH etc.
@@ -555,11 +559,12 @@ class Page {
         set_time_limit(120);
 
         if (stripos($this->text, 'CITATION_BOT_PLACEHOLDER') !== false) {
-            $this->text = $this->start_text;                                                                    // @codeCoverageIgnore
+            echo '<p>', echoable($this->text), '</p>'; // @codeCoverageIgnoreStart
+            $this->text = $this->start_text;
             if ($this->title !== "") {
                 bot_debug_log($this->title . " page failed");
             }
-            report_error('CITATION_BOT_PLACEHOLDER found after processing');    // @codeCoverageIgnore
+            report_error('CITATION_BOT_PLACEHOLDER found after processing');  // @codeCoverageIgnoreEnd
         }
 
         // we often just fix Journal caps, so must be case sensitive compare
@@ -569,15 +574,15 @@ class Page {
         $last_first_out = [' last1=', ' last1 =', '|last1=', '|last1 =', ' first1=', ' first1 =', '|first1=', '|first1 =','ite news',      '',            '',              '',             '',             '',             '',               '',              '',              '',             '',               '',              '',              '',              '',                '',               '',               'Cite',  'cite',  'ubscription',          'work'];
         // @codeCoverageIgnoreStart
         if ((WIKI_ROOT === 'https://simple.wikipedia.org/w/index.php') || (stripos($this->title, "draft:") === 0)) { // Backload clean-up
-                $caps_ok = [];
-                $last_first_in   = [];
-                $last_first_out = [];
+            $caps_ok = [];
+            $last_first_in   = [];
+            $last_first_out = [];
         } // @codeCoverageIgnoreEnd
         return strcmp(str_replace($last_first_in, $last_first_out, str_ireplace($caps_ok, $caps_ok, $this->text)),
                                     str_replace($last_first_in, $last_first_out, str_ireplace($caps_ok, $caps_ok, $this->start_text))) !== 0;
     }
 
-    public function edit_summary(): string {
+    public function edit_summary(string $edit_summary_end = ''): string {
         $auto_summary = "";
         $altered_list = $this->modifications["changeonly"];
         if (count($altered_list) !== 0) {
@@ -709,9 +714,25 @@ class Page {
         if (!$auto_summary) {
             $auto_summary = "Misc citation tidying. ";
         }
-        $auto_summary .= "| [[:en:WP:UCB|Use this bot]]. [[:en:WP:DBUG|Report bugs]]. ";
-        if (WIKI_ROOT !== 'https://en.wikipedia.org/w/index.php') {
-            $auto_summary = str_replace('[[WP:', '[[en:WP:', $auto_summary);    // @codeCoverageIgnore
+        $auto_summary .= "| [[:en:WP:UCB|Use this bot]]. [[:en:WP:DBUG|Report bugs]]. " . $edit_summary_end;
+
+        switch (WIKI_BASE) {
+            case 'en':
+            case 'simple':
+            case 'mdwiki':
+                break; // English
+            case 'mk':
+                foreach (MK_TRANS as $eng => $not_eng) {
+                    $auto_summary = str_replace($eng, $not_eng, $auto_summary);
+                }
+                break; // Macedonian
+            case 'ru':
+                foreach (RU_TRANS as $eng => $not_eng) {
+                    $auto_summary = str_replace($eng, $not_eng, $auto_summary);
+                }
+                break; // Russian
+            default:
+                report_error('invalid wiki in edit summary');
         }
         return $auto_summary;
     }
@@ -730,17 +751,18 @@ class Page {
         $failures[4] = false;
         throttle(); // This is only writing.    Not pages that are left unchanged
         if ($api->write_page($this->title, $this->text,
-                        $this->edit_summary() . $edit_summary_end,
+                        $this->edit_summary($edit_summary_end),
                         $this->lastrevid, $this->read_at)) {
             return true;
         }
+        // @codeCoverageIgnoreStart
         if (TRAVIS) {
             return false;
-        }    // @codeCoverageIgnoreStart
+        }
         sleep(9);    // could be database being locked
         report_info("Trying to write again after waiting");
         $return = $api->write_page($this->title, $this->text,
-                    $this->edit_summary() . $edit_summary_end,
+                    $this->edit_summary($edit_summary_end),
                     $this->lastrevid, $this->read_at);
         if ($return) {
             return true;
@@ -826,18 +848,26 @@ class Page {
         }
 
         if ($preg_ok === false) { // Something went wrong.  Often from bad wiki-text.
+            gc_collect_cycles();
+            if (TRAVIS) {
+                report_error("Critical Error on page: " . echoable($this->title));
+            }
             // @codeCoverageIgnoreStart
             $this->page_error = true;
             report_warning('Regular expression failure in ' . echoable($this->title) . ' when extracting ' . $class . 's');
             if ($class === "Template") {
-                echo "<p><h3>\n\n The following text might help you figure out where the <b>error on the page</b> is (Look for lone { and } characters, or unclosed comment)</h3>\n<h4> If that is not the problem, then run the single page with &prce=1 added to the URL to change the parsing engine</h4>\n" . echoable($text) . "\n\n<p>";
+                if (WIKI_BASE === 'mk') {
+                    $err1 = 'Следниот текст може да ви помогне да сфатите каде е грешката на страницата (Барајте само { и } знаци или незатворен коментар)';
+                    $err2 = 'Ако тоа не е проблемот, тогаш стартувајте ја единствената страница со &prce=1 додадена на URL-то за да го промените моторот за парсирање';
+                } elseif (WIKI_BASE === 'ru') {
+                    $err1 = 'Следующий текст может помочь вам выяснить, где находится ошибка на странице (ищите одинокие символы { и } или незакрытый комментарий)';
+                    $err2 = 'Если проблема не в этом, то запустите отдельную страницу с &prce=1, добавленным к URL, чтобы изменить механизм синтаксического анализа.';
+                } else {
+                    $err1 = 'The following text might help you figure out where the error on the page is (Look for lone { and } characters, or unclosed comment)';
+                    $err2 = 'If that is not the problem, then run the single page with &prce=1 added to the URL to change the parsing engine';
+                }
+                echo '<p><h3>', $err1, '</h3><h4>', $err2, '</h4></p><p>', echoable($text), '</p>';
             }
-            if (TRAVIS) {
-                report_error("Critical Error on page: " . echoable($this->title));
-            } else {
-                report_warning("Either page is too big and complex or there is an error with { and } characters balancing out.");
-            }
-            gc_collect_cycles();
             // @codeCoverageIgnoreEnd
         }
         $this->text = $text;
@@ -845,12 +875,14 @@ class Page {
     }
 
     /** @param array<WikiThings|Template> $objects */
-    private function replace_object(array &$objects): void {    // Pointer to save memory
-        $i = count($objects);
+    private function replace_object(array &$objects): void {  // Pointer to save memory
+        set_time_limit(120);
         if ($objects) {
-            foreach (array_reverse($objects) as $obj) {
+            $i = count($objects);
+            $reverse = array_reverse($objects);
+            foreach ($reverse as $obj) {
                 --$i;
-                $this->text = str_ireplace(sprintf($obj::PLACEHOLDER_TEXT, $i), $obj->parsed_text(), $this->text); // Case insensitive, since comment placeholder might get title case, etc.
+                $this->text = str_ireplace(sprintf($obj::PLACEHOLDER_TEXT, $i), $obj->parsed_text(), $this->text); // Case insensitive, since placeholder might get title case, etc.
             }
         }
     }
@@ -890,47 +922,46 @@ class Page {
 
         // get value of name-list-style parameter in "cs1 config" templates such as {{cs1 config |name-list-style=vanc }}
 
-        $name_list_style = null;
+        $name_list_style = VancStyle::NAME_LIST_STYLE_DEFAULT;
         $pattern = '/{{\s*?cs1\s*?config[^}]*?name-list-style\s*?=\s*?(\w+)\b[^}]*?}}/im';
         if (preg_match($pattern, $this->text, $matches) && array_key_exists(1, $matches)) {
             $s = strtolower($matches[1]); // We ONLY deal with first one
             if ($s === 'default' || $s === 'none') {
-                $name_list_style = NAME_LIST_STYLE_DEFAULT;
+                $name_list_style = VancStyle::NAME_LIST_STYLE_DEFAULT;
             } elseif ($s === 'vanc') {
-                $name_list_style = NAME_LIST_STYLE_VANC;
+                $name_list_style = VancStyle::NAME_LIST_STYLE_VANC;
             } elseif ($s === 'amp') {
-                $name_list_style =  NAME_LIST_STYLE_AMP;
+                $name_list_style = VancStyle::NAME_LIST_STYLE_AMP;
             } elseif ($s !== '') {
                 bot_debug_log('Weird name-list-style found: ' . echoable($s));
             }
         }
-        if ($name_list_style !== null) {
-            $this->name_list_style = $name_list_style;
-        } else {
-            $this->name_list_style = NAME_LIST_STYLE_DEFAULT;
-        }
+        $this->name_list_style = $name_list_style;
     }
 
     private function set_date_pattern(): void {
         // see {{use_mdy_dates}} and {{use_dmy_dates}}
-        $date_style = DATES_WHATEVER;
+        $date_style = DateStyle::DATES_WHATEVER;
+        if (WIKI_BASE === 'mk' || WIKI_BASE === 'ru') {
+            $date_style = DateStyle::DATES_ISO;
+        }
         if (preg_match('~\{\{Use mdy dates[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_MDY;
+            $date_style = DateStyle::DATES_MDY;
         }
         if (preg_match('~\{\{Use mdy[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_MDY;
+            $date_style = DateStyle::DATES_MDY;
         }
         if (preg_match('~\{\{mdy[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_MDY;
+            $date_style = DateStyle::DATES_MDY;
         }
         if (preg_match('~\{\{Use dmy dates[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_DMY;
+            $date_style = DateStyle::DATES_DMY;
         }
         if (preg_match('~\{\{Use dmy[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_DMY;
+            $date_style = DateStyle::DATES_DMY;
         }
         if (preg_match('~\{\{dmy[^\}\{]*\}\}~i', $this->text)) {
-            $date_style = DATES_DMY;
+            $date_style = DateStyle::DATES_DMY;
         }
         $this->date_style = $date_style;
     }

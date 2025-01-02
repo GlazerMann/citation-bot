@@ -399,6 +399,24 @@ final class PageTest extends testBaseClass {
         $this->assertTrue((bool) stripos($page->parsed_text(), '978-1-78262-629-9'));
     }
 
+    public function testUrlReferencesWithText18(): void {
+        $text = "<ref>https://doi.org/10.2307/962034{{full}}</ref>";
+        $page = $this->process_page($text);
+        $this->assertTrue((bool) stripos($page->parsed_text(), 'jstor=962034'));
+    }
+
+    public function testUrlReferencesWithText19(): void {
+        $text = "<ref>https://doi.org/10.2307/962034{{Bare URL inline}}</ref>";
+        $page = $this->process_page($text);
+        $this->assertTrue((bool) stripos($page->parsed_text(), 'jstor=962034'));
+    }
+
+    public function testConfer(): void {
+        $text = '{{cite conference|work=Yup}}';
+        $page = $this->process_page($text);
+        $this->assertSame($text, $page->parsed_text());
+    }
+
     public function testMagazine(): void {
         $text = '{{cite magazine|work=Yup}}';
         $page = $this->process_page($text);
@@ -526,6 +544,16 @@ final class PageTest extends testBaseClass {
         $this->assertSame('The application of 3D technology in video games', $template->get2('title'));
         $this->assertSame('1087', $template->get2('volume'));
         $this->assertSame('cite news', $template->wikiname());
+    }
+
+    public function testDuplicateStuff(): void {
+        $text = "{{cite journal|chapter-url=https://cnn.com|chapterurl=|accessdate=|access-date=2020-10-10|url=https://cnn2.com}}";
+        $template = $this->process_citation($text);
+        $this->assertSame('https://cnn.com', $template->get2('chapter-url'));
+        $this->assertSame('2020-10-10', $template->get2('access-date'));
+        $this->assertSame('https://cnn2.com', $template->get2('url'));
+        $this->assertNull($template->get2('chapterurl'));
+        $this->assertNull($template->get2('accessdate'));
     }
 
 }

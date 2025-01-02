@@ -56,6 +56,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testConstantsOoops(): void { // Did we forget to upper/lower case one of them?
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         for ($i = 0; $i < count(JOURNAL_ACRONYMS); $i++) {
             $this->assertNotEquals(trim(JOURNAL_ACRONYMS[$i]), trim(UCFIRST_JOURNAL_ACRONYMS[$i]));
         }
@@ -65,6 +66,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testForDisasters(): void { // Did we get things out of order and cause a disaster?
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $this->assertSame('BJPsych', title_capitalization('Bjpsych', true));
         $this->assertSame('HortScience', title_capitalization('Hortscience', true));
         $this->assertSame('TheMarker', title_capitalization('Themarker', true));
@@ -78,6 +80,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testImplicitConstants(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         // Consonants
         $this->assertSame('X', title_capitalization('x', true));
         $this->assertSame('Xz', title_capitalization('xz', true));
@@ -96,6 +99,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testAllLowerCase(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $big_array = array_merge(HAS_NO_VOLUME, BAD_ACCEPTED_MANUSCRIPT_TITLES, BAD_AUTHORS,
                                  PUBLISHER_ENDINGS, BAD_TITLES, IN_PRESS_ALIASES, NON_PUBLISHERS,
                                  JOURNAL_IS_BOOK_SERIES, HAS_NO_ISSUE, WORKS_ARE_PUBLISHERS, PREFER_VOLUMES,
@@ -106,6 +110,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testMinimized(): void { // See is_book_series() function
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $big_array = JOURNAL_IS_BOOK_SERIES;
         foreach ($big_array as $actual) {
             $simple = trim(str_replace(['-', '.',  '   ', '  ', '[[', ']]'], [' ', ' ', ' ', ' ', ' ', ' '], $actual));
@@ -115,6 +120,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testAllFreeOfUTF(): void { // If this fails, then we have to switch everything to MB_ (BAD_AUTHORS, HAS_NO_ISSUE already has UTF-8)
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $big_array = array_merge(HAS_NO_VOLUME, BAD_ACCEPTED_MANUSCRIPT_TITLES,
                                  PUBLISHER_ENDINGS, BAD_TITLES, IN_PRESS_ALIASES, NON_PUBLISHERS,
                                  JOURNAL_IS_BOOK_SERIES, WORKS_ARE_PUBLISHERS, PREFER_VOLUMES,
@@ -129,6 +135,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testNoSpacesOnEnds(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $big_array = array_merge(HAS_NO_VOLUME, BAD_ACCEPTED_MANUSCRIPT_TITLES, BAD_AUTHORS,
                                  PUBLISHER_ENDINGS, BAD_TITLES, IN_PRESS_ALIASES, NON_PUBLISHERS,
                                  JOURNAL_IS_BOOK_SERIES, HAS_NO_ISSUE, WORKS_ARE_PUBLISHERS, PREFER_VOLUMES,
@@ -141,6 +148,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testAtoZ(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $leader = true;
         $start_alpha = '/* The following will be automatically updated to alphabetical order */';
         $end_alpha = '/* The above will be automatically updated to alphabetical order */';
@@ -193,6 +201,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testWhiteList(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $we_failed = false;
         $our_original_whitelist = PARAMETER_LIST;
         $our_whitelist = array_unique($our_original_whitelist);
@@ -252,6 +261,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testWhiteListNotBlacklisted(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $whitelist = array_merge(DEAD_PARAMETERS, PARAMETER_LIST);
         $orig = '';
         $new = '';
@@ -267,16 +277,16 @@ final class constantsTest extends testBaseClass {
             $text = str_replace(['| doi-access = Z123Z ', '| access-date = Z123Z ', '| accessdate = Z123Z ', '| doi-broken = Z123Z ', '| doi-broken-date = Z123Z ', '| doi-inactive-date = Z123Z ', '| pmc-embargo-date = Z123Z ', '| embargo = Z123Z ', '| arşivengelli = Z123Z '], '', $text);
             $text = str_replace(['displayeditors',  'editor1mask',  'editormask1',  'interviewerlink',  'interviewermask',  'no-cat', 'notracking',  'interviewermask',  'albumlink', 'ISBN13', 'isbn13'],
                                 ['display-editors', 'editor-mask1', 'editor-mask1', 'interviewer-link', 'interviewer-mask', 'nocat',  'no-tracking', 'interviewer-mask', 'titlelink', 'isbn',   'isbn'], $text);
-            $text = str_replace(['editor1link',  'editorlink1',  'subjectlink1'],
-                                ['editor1-link', 'editor1-link', 'subject-link1'], $text);
+            $text = str_replace(['editor1link',  'editorlink1',  'subjectlink1',  'origyear'],
+                                ['editor1-link', 'editor1-link', 'subject-link1', 'orig-date'], $text);
             $text = str_replace(['booktitle',  'nopp',  'displayauthors',  'city',     'editorlink',  ' editors ='],
                                 ['book-title', 'no-pp', 'display-authors', 'location', 'editor-link', ' editor ='], $text);
             $text = str_replace(['episodelink',  'mailinglist',  'mapurl',  'serieslink' , 'coauthor '],
                                 ['episode-link', 'mailing-list', 'map-url', 'series-link', 'coauthors ' ], $text);
             $text = str_replace(['titlelink',  'nocat',       'nocat',       ' embargo',          'conferenceurl',  'contributionurl',  'laydate',  'laysource',  'layurl',  'sectionurl',  'seriesno',  'timecaption',  'titlelink'],
                                 ['title-link', 'no-tracking', 'no-tracking', ' pmc-embargo-date', 'conference-url', 'contribution-url', 'lay-date', 'lay-source', 'lay-url', 'section-url', 'series-no', 'time-caption', 'title-link'], $text);
-            $text = str_replace(['subjectlink',  'transcripturl',  '| name = ',   'extrait', 'deadlink'],
-                                ['subject-link', 'transcript-url', '| author = ', 'quote',   'deadurl'  ], $text);
+            $text = str_replace(['subjectlink',  'transcripturl',  '| name = ',   'extrait', 'deadlink', 'dead-link'],
+                                ['subject-link', 'transcript-url', '| author = ', 'quote',   'deadurl',  'deadurl'  ], $text);
             if ($prepared->get('doi') === 'Z123Z') {
                 $prepared->forget('doi-broken-date');
             }
@@ -289,6 +299,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testDead(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $overlap = array_intersect(DEAD_PARAMETERS, PARAMETER_LIST);
         if (empty($overlap)) {
             $this->assertTrue(true);
@@ -301,6 +312,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testMagazinesAndNot(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $overlap = array_intersect(ARE_MAGAZINES, ARE_MANY_THINGS);
         if (empty($overlap)) {
             $this->assertTrue(true);
@@ -331,6 +343,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testAuthorsFlat() {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $failed = false;
         $test_flat = [];
         foreach (AUTHOR_PARAMETERS as $array) {
@@ -374,6 +387,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testNonJournalList() {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $flat = NON_JOURNAL_WEBSITES;
         sort($flat);
         $failed = false;
@@ -409,6 +423,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testNonJournalListIsNotBad() {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $failed = false;
         foreach (CANONICAL_PUBLISHER_URLS as $journal) {
             $journal = $journal . '/';
@@ -419,7 +434,30 @@ final class constantsTest extends testBaseClass {
             if ($check !== $journal) {
                  $failed = true;
                  $this->flush();
-                 echo "\n\n CANONICAL_PUBLISHER_URLS damaged by NON_JOURNAL_WEBSITES: " . $journal . ' ' . $check . "\n\n";
+                 echo "\n\n CANONICAL_PUBLISHER_URLS damaged by NON_JOURNAL_WEBSITES: " . $journal . ' changed to ' . $check . "\n\n";
+                 $this->flush();
+            }
+            $check = $journal;
+            foreach (JOURNAL_ARCHIVES_SITES as $bad) {
+                $check = str_ireplace($bad, '', $check);
+            }
+            if ($check !== $journal) {
+                 $failed = true;
+                 $this->flush();
+                 echo "\n\n JOURNAL_ARCHIVES_SITES damaged by NON_JOURNAL_WEBSITES: " . $journal . ' changed to ' . $check . "\n\n";
+                 $this->flush();
+            }
+        }
+        foreach (NON_JOURNAL_WEBSITES as $journal) {
+            $journal = $journal . '/';
+            $check = $journal;
+            foreach (JOURNAL_ARCHIVES_SITES as $bad) {
+                $check = str_ireplace($bad, '', $check);
+            }
+            if ($check !== $journal) {
+                 $failed = true;
+                 $this->flush();
+                 echo "\n\n NON_JOURNAL_WEBSITES damaged by JOURNAL_ARCHIVES_SITES: " . $journal . ' changed to ' . $check . "\n\n";
                  $this->flush();
             }
         }
@@ -427,6 +465,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testItalicsOrder(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $in_order = true;
         $spaces_at = 99999999;
         $max_spaces = 0;
@@ -474,6 +513,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testItalicsNoDuplicates(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $italics = explode("|", ITALICS_LIST);
         sort($italics);
         $last = "123412341234";
@@ -491,6 +531,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testCamelNoDuplicates(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $italics = CAMEL_CASE;
         sort($italics);
         $last = "123412341234";
@@ -509,31 +550,37 @@ final class constantsTest extends testBaseClass {
 
 
     public function testItalicsEscaped1(): void {
-         $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
-         $this->assertSame(0 , substr_count($italics, '('));
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
+        $this->assertSame(0 , substr_count($italics, '('));
     }
     public function testItalicsEscaped2(): void {
-         $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
-         $this->assertSame(0 , substr_count($italics, ')'));
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
+        $this->assertSame(0 , substr_count($italics, ')'));
     }
     public function testItalicsEscaped3(): void {
-         $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
-         $this->assertSame(0 , substr_count($italics, '\\'));
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
+        $this->assertSame(0 , substr_count($italics, '\\'));
     }
     public function testItalicsEscaped4(): void {
-         $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
-         $this->assertSame(0 , substr_count($italics, '.'));
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $italics = str_replace(['\\(', '\\)', '\\.'], '', ITALICS_LIST);
+        $this->assertSame(0 , substr_count($italics, '.'));
     }
 
- public function testItalicsNoSpaces(): void {
+    public function testItalicsNoSpaces(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $italics = explode("|", ITALICS_LIST);
         foreach ($italics as $item) {
             $this->assertNotEquals(' ', substr($item, 0, 1));
             $this->assertNotEquals(' ', substr($item, -1));
         }
- }
+    }
 
- public function testItalicsHardCode(): void {
+    public function testItalicsHardCode(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $this->assertSame(count(ITALICS_HARDCODE_IN), count(ITALICS_HARDCODE_OUT));
         for ($i = 0; $i < count(ITALICS_HARDCODE_OUT); $i++) {
             $this->assertSame(0, substr_count("'''", ITALICS_HARDCODE_IN[$i]));
@@ -542,9 +589,9 @@ final class constantsTest extends testBaseClass {
             $out = str_replace(["'", " ", ':', ',', '.'], ['', '', '', '', ''], ITALICS_HARDCODE_OUT[$i]);
             $this->assertSame($in, $out); // Same once spaces and single quotes are removed
         }
- }
+    }
 
- public function testConversionsGood(): void {
+    public function testConversionsGood(): void {
         WikipediaBot::make_ch();
         $page = new TestPage();
         $errors = "";
@@ -565,14 +612,17 @@ final class constantsTest extends testBaseClass {
             }
             $tem = 'Template:' . $convert[1];
             $tem = str_replace(' ', '_', $tem);
-            if (WikipediaBot::is_redirect($tem) !== 0 && $tem !== 'Template:Cite_paper' && $tem !== 'Template:cite_paper') { // We use code to clean up cite paper
-                $errors = $errors . '   In now a redirect:' . $convert[1];
+            if (WikipediaBot::is_redirect($tem) !== 0 &&
+                $tem !== 'Template:Cite_paper' && $tem !== 'Template:cite_paper' && // We use code to clean up cite paper
+                $tem !== 'Template:LCCN') { // We remove one layer of re-direct, but not both
+                $errors = $errors . '   Is now a redirect:' . $convert[1];
             }
         }
         $this->assertSame("", $errors); // We want a list of all of them
     }
 
     public function testFreeDOI(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         foreach (DOI_FREE_PREFIX as $prefix) {
             $this->assertTrue($prefix != '');
             if (strpos($prefix, '/') === false) {
@@ -582,6 +632,7 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testISBNlist(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
         $last = -1;
         foreach (ISBN_HYPHEN_POS as $k => $v) {
             $k = (int) $k;
@@ -595,8 +646,52 @@ final class constantsTest extends testBaseClass {
     }
 
     public function testForISBNListUpdates(): void { // https://en.wikipedia.org/w/index.php?title=Module:Format_ISBN/data&action=history
-            $wikipedia_response = WikipediaBot::GetAPage('Module:Format_ISBN/data');
-            $this->assertSame(1, substr_count($wikipedia_response, 'RangeMessage timestamp:'));
-            $this->assertSame(1, substr_count($wikipedia_response, ISBN_TIME_STAMP_USED));
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $wikipedia_response = WikipediaBot::GetAPage('Module:Format_ISBN/data');
+        $this->assertSame(1, substr_count($wikipedia_response, 'RangeMessage timestamp:'));
+        $this->assertSame(1, substr_count($wikipedia_response, ISBN_TIME_STAMP_USED));
     }
+
+    public function testCurlLimit(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $ch = curl_init();
+        $this->assertSame(1, curl_limit_page_size($ch, 1, 134217729));
+        $this->assertSame(0, curl_limit_page_size($ch, 1, 134217728));
+    }
+
+    public function testDoubleMap(): void {
+        $pg = new TestPage(); unset($pg); // Fill page name with test name for debugging
+        $errors = '';
+        $all_maps = array_merge(COMMON_MISTAKES, COMMON_MISTAKES_TOOL);
+        $okay_to_be_bad = ['coauthors', 'deadurl', 'lay-date', 'lay-source', 'lay-url', 'month', 'authors'];  // We upgrade dead paramters to better dead parameters
+        foreach ($all_maps as $map_me => $mapped) {
+            if (isset($all_maps[$mapped])) {
+                $errors .= ' re-mapped: ' . $map_me . '/' . $mapped . '    ';
+            }
+            if (trim($mapped) !== $mapped || trim($map_me) !== $map_me) {
+                $errors .= ' extra white space: ' . $map_me . '/' . $mapped . '    ';
+            }
+            // Number replaced with pound
+            $mappedp = preg_replace('~\d+~', '#', $mapped);
+            $mappedp = preg_replace('~##+~', '#', $mappedp);
+            if ($mappedp === 's#cid') {
+            	$mappedp = 's2cid';
+            }
+            if (!in_array($mapped, $okay_to_be_bad, true)) {
+            	if (!in_array($mappedp, PARAMETER_LIST, true)) {
+                	$errors .= ' mapped to non-existant parameter: ' . $map_me . '/' . $mapped . '    ';
+            	}
+            	if (in_array($mappedp, DEAD_PARAMETERS, true) || in_array($mapped, DEAD_PARAMETERS, true)) {
+                	$errors .= ' mapped to dead parameter: ' . $map_me . '/' . $mapped . '    ';
+            	}
+            }
+        }
+        foreach (COMMON_MISTAKES_TOOL as $map_me) {
+            if (isset(COMMON_MISTAKES[$map_me])) {
+                $errors .= ' double-mapped: ' . $map_me . '    ';
+            }
+        }
+        $this->assertSame('', $errors);
+    }
+  
 }

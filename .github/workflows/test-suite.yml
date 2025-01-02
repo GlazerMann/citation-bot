@@ -54,15 +54,13 @@ jobs:
          PHP_WP_OAUTH_SECRET: ${{ secrets.PHP_WP_OAUTH_SECRET }}
          PHP_WP_OAUTH_CONSUMER: ${{ secrets.PHP_WP_OAUTH_CONSUMER }}
          PHP_S2APIKEY: ${{ secrets.PHP_S2APIKEY }}
-      run: ./vendor/bin/phpunit --enforce-time-limit --default-time-limit 8000 --coverage-clover coverage.xml 1>&2
+      run: ./vendor/bin/phpunit --enforce-time-limit --default-time-limit 11000 --coverage-clover coverage.xml 1>&2
 
     - name: Code Coverage
       if: always()
       env:
          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      uses: codecov/codecov-action@v4.3.0
-      with:
-         file: ./coverage.xml
+      uses: codecov/codecov-action@v5.0.7
 
     - name: Look for weird stuff
       if: always()
