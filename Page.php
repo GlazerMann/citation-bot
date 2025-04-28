@@ -295,11 +295,14 @@ class Page {
                                         substr_count($UPPER, '*') !== 0 || // A list!!!
                                         substr_count($UPPER, "\n") > 8 || // who knows
                                         substr_count($UPPER, 'SEE ALSO') !== 0 ||
+                                        substr_count($UPPER, ', SEE ') !== 0 ||
                                         substr_count($UPPER, 'CITATION_BOT_PLACEHOLDER_COMMENT') !== 0 ||
                                         substr_count($UPPER, '{{CITE') !== 0 ||
                                         substr_count($UPPER, '{{CITATION') !== 0 ||
                                         substr_count($UPPER, '{{ CITE') !== 0 ||
-                                        substr_count($UPPER, '{{ CITATION') !== 0) {
+                                        substr_count($UPPER, '{{ CITATION') !== 0 ||
+                                        strpos($matches[1], 'note') !== false
+                                   ) {
                                     return $matches[0];
                                 }
                                 return $matches[1] . '{{cite journal | url=' . wikifyURL($matches[3]) . ' | ' . strtolower('CITATION_BOT_PLACEHOLDER_BARE_URL') .'=' . base64_encode($matches[2] . $matches[3] . $matches[4] . $matches[5]) . ' }}' . $matches[6];
@@ -849,12 +852,9 @@ class Page {
 
         if ($preg_ok === false) { // Something went wrong.  Often from bad wiki-text.
             gc_collect_cycles();
-            if (TRAVIS) {
-                report_error("Critical Error on page: " . echoable($this->title));
-            }
-            // @codeCoverageIgnoreStart
             $this->page_error = true;
-            report_warning('Regular expression failure in ' . echoable($this->title) . ' when extracting ' . $class . 's');
+            report_minor_error('Regular expression failure in ' . echoable($this->title) . ' when extracting ' . $class . 's');
+            // @codeCoverageIgnoreStart
             if ($class === "Template") {
                 if (WIKI_BASE === 'mk') {
                     $err1 = 'Следниот текст може да ви помогне да сфатите каде е грешката на страницата (Барајте само { и } знаци или незатворен коментар)';

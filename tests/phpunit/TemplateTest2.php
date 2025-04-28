@@ -3702,7 +3702,7 @@ final class TemplateTest2 extends testBaseClass {
 
     public function testBibcodesFindBooks(): void {
         $this->requires_bibcode(function(): void {
-            $text = "{{cite book|title=Enhancement of Electrochemical Activity in Bioelectrochemical Systems by Using Bacterial Anodes: An Overview|year=2022|last1=Gandu|first1=Bharath|last2=Rozenfeld|first2=Shmuel|last3=Ouaknin Hirsch|first3=Lea|last4=Schechter|first4=Alex|last5=Cahan|first5=Rivka|bibcode= }}";
+            $text = "{{cite book|title=Enhancement of Electrochemical Activity in Bioelectrochemical Systems by Using Bacterial Anodes: An Overview|year=2020|last1=Gandu|first1=Bharath|last2=Rozenfeld|first2=Shmuel|last3=Ouaknin Hirsch|first3=Lea|last4=Schechter|first4=Alex|last5=Cahan|first5=Rivka|bibcode= }}";
             $expanded = $this->process_citation($text);
             $this->assertSame('2020bisy.book..211G', $expanded->get2('bibcode'));
         });
@@ -4742,4 +4742,32 @@ final class TemplateTest2 extends testBaseClass {
         $this->assertSame('A_X http', $expanded->get3('author-link3'));
     }
 
+    public function testBookTitleCleanUp1(): void {
+        $text = "{{cite book|book-title=X}}";
+        $expanded = $this->process_citation($text);
+        $this->assertSame('X', $expanded->get3('title'));
+        $this->assertNull($expanded->get2('chapter'));
+        $this->assertNull($expanded->get2('book-title'));
+    }
+    public function testBookTitleCleanUp2(): void {
+        $text = "{{cite book|book-title=X|title=Y}}";
+        $expanded = $this->process_citation($text);
+        $this->assertSame('X', $expanded->get3('title'));
+        $this->assertSame('Y', $expanded->get3('chapter'));
+        $this->assertNull($expanded->get2('book-title'));
+    }
+    public function testBookTitleCleanUp3(): void {
+        $text = "{{cite book|book-title=X|title=X|chapter=Y}}";
+        $expanded = $this->process_citation($text);
+        $this->assertSame('X', $expanded->get3('title'));
+        $this->assertSame('Y', $expanded->get3('chapter'));
+        $this->assertNull($expanded->get2('book-title'));
+    }
+    public function testBookTitleCleanUp4(): void {
+        $text = "{{cite book|book-title=This is book-title|title=And title time|chapter=Chapter wapper}}";
+        $expanded = $this->process_citation($text);
+        $this->assertSame('And title time', $expanded->get3('title'));
+        $this->assertSame('This is book-title', $expanded->get3('book-title'));
+        $this->assertSame('Chapter wapper', $expanded->get3('chapter'));
+    }
 }

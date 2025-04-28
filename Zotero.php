@@ -90,29 +90,29 @@ final class Zotero {
 
         self::$zotero_announced = 1;
         foreach ($templates as $template) {
-            self::expand_by_zotero($template);
-        }
-        self::$zotero_announced = 2;
-        foreach ($templates as $template) {
+            $doi = $template->get('doi');
+            if (!doi_active($doi)) { // Do not expand if DOI works with CrossRef
+                self::expand_by_zotero($template);
+            }
             if ($template->has('biorxiv')) {
                 if ($template->blank('doi')) {
                     $template->add_if_new('doi', '10.1101/' . $template->get('biorxiv'));
                     expand_by_doi($template, true); // this data is better than zotero
                 } elseif (strstr($template->get('doi'), '10.1101') === false) {
-                     expand_doi_with_dx($template, '10.1101/' . $template->get('biorxiv'));  // dx data is better than zotero
-                     self::expand_by_zotero($template, 'https://dx.doi.org/10.1101/' . $template->get('biorxiv')); // Rare case there is a different DOI
+                    expand_doi_with_dx($template, '10.1101/' . $template->get('biorxiv'));  // dx data is better than zotero
+                    self::expand_by_zotero($template, 'https://dx.doi.org/10.1101/' . $template->get('biorxiv')); // Rare case there is a different DOI
                 }
             }
-            $doi = $template->get('doi');
+            $doi = $template->get('doi'); // might have changed
             if (!doi_active($doi)) {
                 if ($template->has('citeseerx')) {
-                     self::expand_by_zotero($template, ' https://citeseerx.ist.psu.edu/viewdoc/summary?doi=' . $template->get('citeseerx'));
+                    self::expand_by_zotero($template, ' https://citeseerx.ist.psu.edu/viewdoc/summary?doi=' . $template->get('citeseerx'));
                 }
                 //  Has a CAPCHA -- if ($template->has('jfm'))
                 //  Has a CAPCHA -- if ($template->has('zbl'))
                 //  Do NOT do MR -- it is a review not the article itself. Note that html does have doi, but do not use it.
                 if ($template->has('hdl')) {
-                     self::expand_by_zotero($template, 'https://hdl.handle.net/' . $template->get('hdl'));
+                    self::expand_by_zotero($template, 'https://hdl.handle.net/' . $template->get('hdl'));
                 }
                 if ($template->has('osti')) {
                     self::expand_by_zotero($template, 'https://www.osti.gov/biblio/' . $template->get('osti'));
@@ -121,15 +121,15 @@ final class Zotero {
                     self::expand_by_zotero($template, 'https://tools.ietf.org/html/rfc' . $template->get('rfc'));
                 }
                 if ($template->has('ssrn')) {
-                     self::expand_by_zotero($template, 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=' . $template->get('ssrn'));
+                    self::expand_by_zotero($template, 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=' . $template->get('ssrn'));
                 }
             }
-            if ($template->has('doi')) {
-                $doi = $template->get('doi');
-                if (!doi_active($doi) && doi_works($doi) && !preg_match(REGEXP_DOI_ISSN_ONLY, $doi)) {
+            $doi = $template->get('doi'); // might have changed
+            if (doi_works($doi)) {
+                if (!doi_active($doi) && !preg_match(REGEXP_DOI_ISSN_ONLY, $doi)) {
                     self::expand_by_zotero($template, 'https://dx.doi.org/' . $doi);  // DOIs without meta-data
                 }
-                if (doi_works($doi) && $template->blank('title') && stripos($doi, "10.1023/A:") === 0) {
+                if ($template->blank('title') && stripos($doi, "10.1023/A:") === 0) {
                     self::expand_by_zotero($template, 'https://link.springer.com/article/' . $doi); // DOIs without title meta-data
                 }
             }
@@ -243,7 +243,7 @@ final class Zotero {
                 } elseif ($template->get('doi-access') === 'free' && $template->get('url-status') === 'dead' && $url_kind === 'url') {
                     report_forget("Existing free DOI; dropping dead URL");
                     $template->forget($url_kind);
-                } elseif (doi_active($template->get('doi')) &&
+                } elseif (doi_works($template->get('doi')) &&
                             !preg_match(REGEXP_DOI_ISSN_ONLY, $template->get('doi')) &&
                             $url_kind !== '' &&
                             (str_ireplace(CANONICAL_PUBLISHER_URLS, '', $template->get($url_kind)) !== $template->get($url_kind)) &&
@@ -396,7 +396,7 @@ final class Zotero {
         }
 
         $bad_url = implode('|', ZOTERO_AVOID_REGEX);
-        if (preg_match("~^https?://(?:www\.|m\.|)(?:" . $bad_url . ")~i", $url)) {
+        if (preg_match("~^https?://(?:www\.|m\.|ftp\.|web\.|)(?:" . $bad_url . ")~i", $url)) {
             return;
         }
 
@@ -410,10 +410,7 @@ final class Zotero {
         }
         set_time_limit(120);
         if (self::$zotero_announced === 1) {
-            report_action("Using Zotero translation server to retrieve details from URLs.");
-            self::$zotero_announced = 0;
-        } elseif (self::$zotero_announced === 2) {
-            report_action("Using Zotero translation server to retrieve details from identifiers.");
+            report_action("Using Zotero translation server to retrieve details from URLs and identifiers");
             self::$zotero_announced = 0;
         }
         $zotero_response = self::zotero_request($url);
@@ -485,10 +482,23 @@ final class Zotero {
             }
         }
         if (!isset($result->title)) {
+            $the_url = substr(echoable(substr($url, 0, 500)), 0, 600); // Limit length
             if (strpos($zotero_response, 'unknown_error') !== false) { // @codeCoverageIgnoreStart
-                report_info("Did not get a title for URL ". echoable($url));
+                report_info("Did not get a title for unknown reason from URL ". $the_url);
+            } elseif (strpos($zotero_response, 'The remote document is not in a supported format') !== false) {
+                report_info("Document type not supported (usually PDF) for URL ". $the_url);
+            } elseif (strpos($zotero_response, 'Unable to load URL') !== false) {
+                report_info("Zotero could not fetch anything for URL ". $the_url);
+            } elseif (strpos($zotero_response, 'Invalid host supplied') !== false) {
+                report_info("DNS lookup failed for URL ". $the_url);
+            } elseif (strpos($zotero_response, 'Unknown error') !== false) {
+                report_info("Did not get a title for unknown reason from URL ". $the_url);
+            } elseif (strpos($zotero_response, 'Unable to get any metadata from url') !== false) {
+                report_info("Did not get a title for unknown meta-data reason from URL ". $the_url);
+            } elseif (strpos($zotero_response, 'Maximum number of allowed redirects reached') !== false) {
+                report_info("Too many redirects for URL ". $the_url);
             } else {
-                report_minor_error("Did not get a title for URL ". echoable($url) . ": " . $zotero_response); // Odd Error
+                report_minor_error("For some odd reason (" . $zotero_response . ") we did not get a title for URL ". $the_url); // Odd Error
             }
             return;  // @codeCoverageIgnoreEnd
         }
@@ -528,6 +538,9 @@ final class Zotero {
         if (stripos($url, 'theathletic.com') !== false) { // Returns NYT
             unset($result->publicationTitle);  // @codeCoverageIgnore
         }
+        if (stripos($url, 'newsen.com') !== false) { // Includes title of article
+            $result->publicationTitle = 'Newsen';
+        }
 
         if (stripos($url, '/x.com') !== false || stripos($url, 'twitter.com') !== false) {
             $result->itemType = 'webpage';   // @codeCoverageIgnore
@@ -558,6 +571,9 @@ final class Zotero {
             $result->itemType = 'webpage';
             unset($result->creators);
             unset($result->author);
+        }
+        if (stripos((string) @$result->publicationTitle, 'Extended Abstracts') !== false) { // https://research.vu.nl/en/publications/5a946ccf-5f5b-4cab-b47e-824508c4d709 
+            unset($result->publicationTitle); 
         }
         
         // Reject if we find more than 5 or more than 10% of the characters are �. This means that character
@@ -946,7 +962,7 @@ final class Zotero {
                     if (str_replace(NON_JOURNALS, '', (string) $result->publicationTitle) === (string) $result->publicationTitle) {
                         if (str_ireplace(NON_JOURNAL_WEBSITES, '', $url) === $url || $template->wikiname() === 'cite journal') {
                             if (str_ireplace(CANONICAL_PUBLISHER_URLS, '', $url) === $url && str_ireplace(JOURNAL_ARCHIVES_SITES, '', $url) === $url) {
-                                if ($url !== '' && strpos($url, 'dx.doi.org') === FALSE && $url !== 'X') { // '' and 'X" are only in test suite
+                                if ($url !== '' && $url !== 'X' && str_ireplace(['digitalcommons', 'repository', 'scholarship', 'digitalcollection', 'dialnet.', 'handle.net', '.library.', 'dx.doi.org'], '', $url) === $url && str_ireplace(NON_JOURNAL_WEBSITES, '', $url) === $url) { // '' and 'X" are only in test suite
                                     bot_debug_log('Possible journal URL: ' . $url);
                                 }
                                 $template->add_if_new('work', (string) $result->publicationTitle);
@@ -1574,7 +1590,8 @@ final class Zotero {
                 return false;  // URL matched existing DOI, so we did not use it
             }
             if ($template->add_if_new('doi', $doi)) {
-                if (doi_active($doi)) {
+                $doi = $template->get('doi');
+                if (doi_works($doi)) {
                     if (is_null($url_sent)) {
                         if (mb_strpos(strtolower($url), ".pdf") === false && !preg_match(REGEXP_DOI_ISSN_ONLY, $doi)) {
                             if ($template->has_good_free_copy()) {
@@ -1662,8 +1679,9 @@ final class Zotero {
                     if ($template->blank('pmc')) {
                         quietly('report_modification', "Converting URL to PMC parameter");
                     }
-                    $new_pmc = @$match[1] . @$match[2] . @$match[3];
-                    if ($new_pmc === '') {
+                    $new_pmc = (string) @$match[1] . @$match[2] . @$match[3];
+                    // php stan does not understand that this could because of the insanity of regex and 8-bit characters and PHP bugs end up being empty
+                    if ($new_pmc === '') { // @phpstan-ignore-line
                         bot_debug_log("PMC oops");
                         return false;
                     }

@@ -69,6 +69,8 @@ include_once './vendor/autoload.php';
 
 define("TRAVIS", (bool) getenv('CI') || defined('__PHPUNIT_PHAR__') || defined('PHPUNIT_COMPOSER_INSTALL') || (strpos((string) @$_SERVER['argv'][0], 'phpunit') !== false));
 
+define('TRUST_DOI_GOOD', true); // TODO - this a bit too trusting
+
 if ((string) @$_REQUEST["page"] . (string) @$argv[1] === "User:AManWithNoPlan/sandbox3") { // Specific page to make sure this code path keeps working
     define('EDIT_AS_USER', true);
 }
@@ -119,7 +121,7 @@ if (!mb_internal_encoding('UTF-8') || !mb_regex_encoding('UTF-8')) { /** @phpsta
 ini_set("memory_limit", "3648M"); // Use Megabytes to match memory usage check code
 ini_set("pcre.backtrack_limit", "1425000000");
 ini_set("pcre.recursion_limit", "425000000");
-if (isset($_REQUEST["pcre"]) || (strpos((string) @$_SERVER['PHP_SELF'], '/gadgetapi.php') !== false)) { // Willing to take slight performance penalty on Gadget
+if ((isset($_REQUEST["pcre"]) && $_REQUEST["pcre"] !== '0') || (strpos((string) @$_SERVER['PHP_SELF'], '/gadgetapi.php') !== false)) { // Willing to take slight performance penalty on Gadget
     ini_set("pcre.jit", "0");
 }
 
@@ -162,7 +164,7 @@ define("NLM_LOGIN", "tool=" . urlencode($nlm_tool) . "&email=" . urlencode($nlm_
 unset($nlm_email, $nlm_apikey, $nlm_tool);
 
 function check_blocked(): void {
-    if (!TRAVIS && ! WikipediaBot::is_valid_user('Citation_bot')) {
+    if (!WikipediaBot::is_valid_user('Citation_bot')) {
         echo '</pre><div style="text-align:center"><h1>The Citation Bot is currently blocked because of disagreement over its usage.</h1><br/><h1>Or, the bot is not enabled on this wiki fully.</h1><h2><a href="https://en.wikipedia.org/wiki/User_talk:Citation_bot" title="Join the discussion" target="_blank"  aria-label="Join the discussion (opens a new window)">Please join in the discussion</a></h2></div><footer><a href="./" title="Use Citation Bot again">Another&nbsp;page</a>?</footer></body></html>';
         exit;
     }

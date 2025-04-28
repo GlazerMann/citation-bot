@@ -20,17 +20,17 @@ final class HandleCache {
     public const MAX_HDL_SIZE = 1024;
 
     /** @var array<bool> $cache_active */
-    public static array $cache_active = [];              // DOI is in CrossRef and works
+    public static array $cache_active = [];             // DOI is in CrossRef, no claims if it still works.
     /** @var array<bool> $cache_inactive */
-    public static array $cache_inactive = [];           // DOI either is not in CrossRef or does not work
+    public static array $cache_inactive = BAD_DOI_ARRAY;// DOI is not in CrossRef
     /** @var array<bool> $cache_good */
-    public static array $cache_good = [];                    // DOI works
+    public static array $cache_good = [];               // DOI works
     /** @var array<string> $cache_hdl_loc */
-    public static array $cache_hdl_loc = [];             // Final HDL location URL
+    public static array $cache_hdl_loc = [];            // Final HDL location URL
     /** @var array<bool> $cache_hdl_bad */
-    public static array $cache_hdl_bad = BAD_DOI_ARRAY;    // HDL/DOI does not resolve to anything
+    public static array $cache_hdl_bad = BAD_DOI_ARRAY; // HDL/DOI does not resolve to anything
     /** @var array<bool> $cache_hdl_null */
-    public static array $cache_hdl_null = [];            // HDL/DOI resolves to null
+    public static array $cache_hdl_null = [];           // HDL/DOI resolves to null
 
     public static function check_memory_use(): void {
         $usage = count(self::$cache_inactive) +
@@ -45,7 +45,7 @@ final class HandleCache {
     }
     public static function free_memory(): void {
         self::$cache_active = [];
-        self::$cache_inactive = [];
+        self::$cache_inactive = BAD_DOI_ARRAY;
         self::$cache_good = [];
         self::$cache_hdl_loc = [];
         self::$cache_hdl_bad = BAD_DOI_ARRAY;
@@ -55,17 +55,13 @@ final class HandleCache {
 }
 
 // ============================================= DOI functions ======================================
-function doi_active(string $doi): ?bool {
+function doi_active(string $doi): ?bool { // Does not reflect if DOI works, but if CrossRef has data
     $doi = trim($doi);
     if (isset(HandleCache::$cache_active[$doi])) {
         return true;
     }
     if (isset(HandleCache::$cache_inactive[$doi])) {
         return false;
-    }
-    $works = doi_works($doi);
-    if ($works !== true) {
-        return $works;
     }
     $works = is_doi_active($doi);
     if ($works === null) { // Temporary problem - do not cache
@@ -81,6 +77,19 @@ function doi_active(string $doi): ?bool {
 
 function doi_works(string $doi): ?bool {
     $doi = trim($doi);
+    if (TRUST_DOI_GOOD && isset(NULL_DOI_BUT_GOOD[$doi])) {
+        return true;
+    }
+    if (isset(NULL_DOI_ANNOYING[$doi])) {
+        return false;
+    }
+    if (!TRAVIS) {
+        foreach (NULL_DOI_STARTS_BAD as $bad_start) {
+            if (stripos($doi, $bad_start) === 0) {
+                return false; // all gone
+            }
+        }
+    }
     if (strlen($doi) > HandleCache::MAX_HDL_SIZE) {
         return null;   // @codeCoverageIgnore
     }
@@ -101,13 +110,11 @@ function doi_works(string $doi): ?bool {
         return null;   // @codeCoverageIgnore
     }
     if ($works === false) {
-        HandleCache::$cache_hdl_bad[$doi] = true;
         if (isset(NULL_DOI_BUT_GOOD[$doi])) {
-            if (strpos($doi, '10.1175/') === 0) { // TODO - just do them all and no longer even try????
-                return true;
-            }
             bot_debug_log('Got bad for good HDL: ' . echoable_doi($doi));
+            return true; // We log these and see if they have changed
         }
+        HandleCache::$cache_hdl_bad[$doi] = true;
         return false;
     }
     HandleCache::$cache_good[$doi] = true;
@@ -209,6 +216,14 @@ function is_doi_works(string $doi): ?bool {
     if (preg_match('~^10\.4435\/BSPI\.~i', $doi)) {
         return false;  // TODO: old ones like 10.4435/BSPI.2018.11 are casinos, and new one like 10.4435/BSPI.2024.06 go to the main page
     }
+    if (isset(NULL_DOI_BUT_GOOD[$doi])) {
+        if (strpos($doi, '10.1353/') === 0) {
+            return true; // TODO - muse is annoying
+        } elseif (strpos($doi, '10.1175/') === 0) {
+            return true; // TODO - American Meteorological Society is annoying
+        }
+    }
+
     $registrant = $matches[1];
     // TODO this will need updated over time.    See registrant_err_patterns on https://en.wikipedia.org/wiki/Module:Citation/CS1/Identifiers
     // 17 August 2024 version is last check
@@ -231,9 +246,6 @@ function is_doi_works(string $doi): ?bool {
     $url = "https://doi.org/" . doi_encode($doi);
     $headers_test = get_headers_array($url);
     if ($headers_test === false) {
-        if (preg_match('~^10\.1038/nature\d{5}$~i', $doi)) {
-            return false;
-        }
         if (isset(NULL_DOI_LIST[$doi])) {
             return false;
         }
@@ -419,6 +431,13 @@ function sanitize_doi(string $doi): string {
             }
         }
     }
+    // Clean up book DOIs
+    if (!doi_works($doi) && preg_match('~^(10\.\d+\/9\d{12})(\-\d{1,3})(\/.+)$~', $doi, $matches)) {
+        if (doi_works($matches[1] . $matches[2]) || doi_works($matches[1])) {
+            $doi = $matches[1] . $matches[2];
+        }
+    }
+   
     return $doi;
 }
 
@@ -1092,7 +1111,13 @@ function title_capitalization(string $in, bool $caps_after_punctuation): string 
         static function (array $matches): string {
             return $matches[1] . 'ppm' . $matches[3];
         },
-        $new_case);    
+        $new_case);
+    $new_case = safe_preg_replace_callback(
+        "~(Serie )([a-z])( )~u",
+        static function (array $matches): string {
+            return $matches[1] . strtoupper($matches[2]) . $matches[3];
+        },
+        $new_case);
     $new_case = trim($new_case);
     // Special cases - Only if the full title
     if ($new_case === 'Bioscience') {
@@ -1111,6 +1136,10 @@ function title_capitalization(string $in, bool $caps_after_punctuation): string 
         $new_case = 'IT Professional';
     } elseif ($new_case === 'Jom') {
         $new_case = 'JOM';
+    } elseif ($new_case === 'NetWorker') {
+        $new_case = 'netWorker';
+    } elseif ($new_case === 'Melus') {
+        $new_case = 'MELUS';
     }
     return $new_case;
 }
@@ -1205,7 +1234,33 @@ function throttle(): void {
 
 // ============================================= Data processing functions ======================================
 
-function tidy_date(string $string): string {
+function tidy_date(string $string): string { // Wrapper to change all pre-1900 dates to just years
+    $string = tidy_date_inside($string);
+    if ($string === '') {
+        return $string;
+    }
+    $time = strtotime($string);
+    if (!$time) {
+        return $string;
+    }
+    $old = strtotime('1 January 1900');
+    if ($old < $time) {
+        return $string;
+    }
+    $new = date('Y', $time);
+    if (strlen($new) === 4) {
+        return ltrim($new, "0"); // Also cleans up 0000
+    }
+    if (strlen($new) === 5 && substr($new, 0, 1) === '-') {
+        $new = ltrim($new, "-");
+        $new = ltrim($new, "0");
+        $new = $new . ' BC';
+        return $new;
+    }
+    return $string;
+}
+
+function tidy_date_inside(string $string): string {
     $string=trim($string);
     if (stripos($string, 'Invalid') !== false) {
         return '';
@@ -1288,7 +1343,7 @@ function tidy_date(string $string): string {
     }
     $string = trim($string);
     if (preg_match('~^(\d{4}\-\d{2}\-\d{2})T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}$~', $string, $matches)) {
-        return tidy_date($matches[1]); // Remove time zone stuff from standard date format
+        return tidy_date_inside($matches[1]); // Remove time zone stuff from standard date format
     }
     if (preg_match('~^\-?\d+$~', $string)) {
         $string = intval($string);
@@ -1324,16 +1379,16 @@ function tidy_date(string $string): string {
         return $string;
     }
     if (preg_match('~^(\d{4}\-\d{1,2}\-\d{1,2})[^0-9]~', $string, $matches)) {
-        return tidy_date($matches[1]); // Starts with date
+        return tidy_date_inside($matches[1]); // Starts with date
     }
     if (preg_match('~\s(\d{4}\-\d{1,2}\-\d{1,2})$~', $string, $matches)) {
-        return tidy_date($matches[1]);  // Ends with a date
+        return tidy_date_inside($matches[1]);  // Ends with a date
     }
     if (preg_match('~^(\d{1,2}/\d{1,2}/\d{4})[^0-9]~', $string, $matches)) {
-        return tidy_date($matches[1]); // Recursion to clean up 3/27/2000
+        return tidy_date_inside($matches[1]); // Recursion to clean up 3/27/2000
     }
     if (preg_match('~[^0-9](\d{1,2}/\d{1,2}/\d{4})$~', $string, $matches)) {
-        return tidy_date($matches[1]);
+        return tidy_date_inside($matches[1]);
     }
 
     // Dates with dots -- convert to slashes and try again.
@@ -1344,7 +1399,7 @@ function tidy_date(string $string): string {
         if (intval($matches[3]) < 100)  {
             $matches[3] = (int) $matches[3] + 1900;
         }
-        return tidy_date((string) $matches[1] . '/' . (string) $matches[2] . '/' . (string) $matches[3]);
+        return tidy_date_inside((string) $matches[1] . '/' . (string) $matches[2] . '/' . (string) $matches[3]);
     }
 
     if (preg_match('~\s(\d{4})$~', $string, $matches)) {
@@ -1447,6 +1502,7 @@ function prior_parameters(string $par, array $list=[]): array {
         case 'location':
         case 'publisher':
         case 'edition':
+        case 'agency':
             return prior_parameters('page', array_merge(['pages'], $list));
         case 'doi':
             return prior_parameters('location', array_merge(['publisher', 'edition'], $list));
@@ -1947,6 +2003,9 @@ function smart_decode(string $title, string $encode, string $archive_url): strin
     if ($encode === 'maccentraleurope') {
         $encode = 'mac-centraleurope';
     }
+    if ($encode === 'UTF-8; charset=UTF-8') {
+        $encode = 'UTF-8';
+    }
     if ($encode === 'Shift_JIS' || $encode === 'x-sjis' || $encode === 'SJIS') {
         $encode = 'SJIS-win';
     }
@@ -2261,9 +2320,35 @@ function doi_is_bad (string $doi): bool {
     $doi = strtolower($doi);
     if ($doi === '10.5284/1000184' || // DOI for the entire database
         $doi === '10.1267/science.040579197' || //  PMID test doi
-        $doi === '10.2307/3511692' || //    common review
-        $doi === '10.1377/forefront' || // / over-truncated
-        $doi === '10.1126/science' || //    // over-truncated
+        $doi === '10.2307/3511692' ||   // common review
+        $doi === '10.1377/forefront' || // over-truncated
+        $doi === '10.1126/science' ||   // over-truncated
+        $doi === '10.1111/j' ||         // over-truncated
+        $doi === '10.3138/j' ||         // over-truncated
+        $doi === '10.7556/jaoa' ||      // over-truncated
+        $doi === '10.7591/j' ||         // over-truncated
+        $doi === '10.7722/j' ||         // over-truncated
+        $doi === '10.1002/bies' ||      // over-truncated
+        $doi === '10.1002/job' ||       // over-truncated
+        $doi === '10.5465/ame' ||       // over-truncated
+        $doi === '10.5465/amp' ||       // over-truncated
+        $doi === '10.3316/ielapa' ||    // over-truncated
+        $doi === '10.3316/informit' ||  // over-truncated
+        $doi === '10.1023/b:boli' ||    // over-truncated
+        $doi === '10.1023/b:cyto' ||    // over-truncated
+        $doi === '10.1023/b:land' ||    // over-truncated
+        $doi === '10.1093/acrefore' ||  // over-truncated
+        $doi === '10.1093/acref' ||     // over-truncated
+        $doi === '10.1093/gao' ||       // over-truncated
+        $doi === '10.1093/gmo' ||       // over-truncated
+        $doi === '10.1093/nsr' ||       // over-truncated
+        $doi === '10.1093/oi' ||        // over-truncated
+        $doi === '10.1093/logcom' ||    // over-truncated
+        $doi === '10.1111/bjep' ||      // over-truncated
+        $doi === '10.1146/annurev' ||   // over-truncated
+        $doi === '10.1093/oi/authority' || // over-truncated
+        $doi === '10.1377/forefront' || // over-truncated
+        $doi === '10.3905/jpm' ||       // over-truncated
         strpos($doi, '10.5779/hypothesis') === 0 || // SPAM took over
         strpos($doi, '10.5555/') === 0 || // Test DOI prefix
         strpos($doi, '10.5860/choice.') === 0 || // Paywalled book review
@@ -3020,7 +3105,7 @@ function clean_dates(string $input): string { // See https://en.wikipedia.org/wi
         }
     }
 
-    if (preg_match('~^(\d{4})\-(\d{2})$~', $input, $matches)) { // 2020-12 i.e. backwards
+    if (preg_match('~^(\d{4})\-(\d{2})$~', $input, $matches) && in_array(WIKI_BASE, ENGLISH_WIKI, true)) { // 2020-12 i.e. backwards
         $year = $matches[1];
         $month = (int) $matches[2];
         if ($month > 0 && $month < 13) {

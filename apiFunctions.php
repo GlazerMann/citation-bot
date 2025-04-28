@@ -85,6 +85,11 @@ final class AdsAbsControl {
 
 }
 
+function is_a_book_bibcode(string $id): bool {
+    $check = str_replace(['book', 'conf', 'PhD'], '', $id);
+    return ($check !== $id);
+}
+
 /**
   @param array<string> $ids
   @param array<Template> $templates
@@ -405,7 +410,7 @@ function adsabs_api(array $ids, array &$templates, string $identifier): void {  
         return;
     }
 
-    // API docs at https://github.com/adsabs/adsabs-dev-api/blob/master/Search_API.ipynb
+    // API docs at https://github.com/adsabs/adsabs-dev-api/blob/master/API_documentation_UNIXshell/Search_API.ipynb
     $adsabs_url = "https://" . (TRAVIS ? 'qa' : 'api')
                     . ".adsabs.harvard.edu/v1/search/bigquery?q=*:*"
                     . "&fl=arxiv_class,author,bibcode,doi,doctype,identifier,"
@@ -450,10 +455,10 @@ function adsabs_api(array $ids, array &$templates, string $identifier): void {  
                 } elseif ($an_id !== (string) $record->bibcode) {  // Existing one is wrong case
                     $this_template->set('bibcode', (string) $record->bibcode);
                 }
-                if ((stripos($an_id, 'book') === false) && (stripos($an_id, 'PhD') === false)) {
-                    process_bibcode_data($this_template, $record);
-                } else {
+                if (is_a_book_bibcode($an_id)) {
                     expand_book_adsabs($this_template, $record);
+                } else {
+                    process_bibcode_data($this_template, $record);
                 }
             }
         }
@@ -628,14 +633,20 @@ function expand_by_doi(Template $template, bool $force = false): void {
                     }
                     if ((string) $author["contributor_role"] === 'editor') {
                         ++$ed_i;
+                        $ed_i_str = (string) $ed_i;
                         if ($ed_i < 31 && !isset($crossRef->journal_title)) {
-                            $template->add_if_new("editor-last{$ed_i}", format_surname((string) $author->surname), 'crossref');
-                            $template->add_if_new("editor-first{$ed_i}", format_forename((string) $author->given_name), 'crossref');
+                            $template->add_if_new("editor-last" . $ed_i_str, format_surname((string) $author->surname), 'crossref');
+                            $template->add_if_new("editor-first" . $ed_i_str, format_forename((string) $author->given_name), 'crossref');
                         }
                     } elseif ((string) $author['contributor_role'] === 'author' && $add_authors) {
                         ++$au_i;
-                        $template->add_if_new("last{$au_i}", format_surname((string) $author->surname), 'crossref');
-                        $template->add_if_new("first{$au_i}", format_forename((string) $author->given_name), 'crossref');
+                        $au_i_str = (string) $au_i;
+                        if ((string) $author->surname === 'Editor' && (string) $author->given_name === 'The') {
+                            $template->add_if_new("author" . $au_i_str, 'The Editor', 'crossref');
+                        } else {
+                            $template->add_if_new("last" . $au_i_str, format_surname((string) $author->surname), 'crossref');
+                            $template->add_if_new("first" . $au_i_str, format_forename((string) $author->given_name), 'crossref');
+                        }
                     }
                 }
             }
@@ -677,9 +688,7 @@ function query_crossref(string $doi): ?object {
         return null; // jstor API is better
     }
     set_time_limit(120);
-    $doi = str_replace(DOI_URL_DECODE, DOI_URL_ENCODE, $doi);
-    /** @psalm-taint-escape ssrf */
-    $url = "https://www.crossref.org/openurl/?pid=" . CROSSREFUSERNAME . "&id=doi:{$doi}&noredirect=TRUE";
+    $url = "https://www.crossref.org/openurl/?pid=" . CROSSREFUSERNAME . "&id=doi:" . doi_encode($doi) . "&noredirect=TRUE";
     curl_setopt($ch, CURLOPT_URL, $url);
     for ($i = 0; $i < 2; $i++) {
         $raw_xml = bot_curl_exec($ch);
@@ -904,7 +913,7 @@ function expand_doi_with_dx(Template $template, string $doi): void {
         if (stripos(@$json['URL'], 'hdl.handle.net')) {
             $template->get_identifiers_from_url($json['URL']);
         }
-    } elseif ($type === 'posted-content' || $type === 'grant' || $type === 'song' || $type === 'motion_picture' || $type === 'patent') { // posted-content is from bioRxiv
+    } elseif ($type === 'posted-content' || $type === 'grant' || $type === 'song' || $type === 'motion_picture' || $type === 'patent' || $type === 'database') { // posted-content is from bioRxiv
         $try_to_add_it('title', @$json['title']);
     } else {
         $try_to_add_it('title', @$json['title']);                          // @codeCoverageIgnore
@@ -1027,7 +1036,7 @@ function expand_by_jstor(Template $template): void {
                     case "T2":
                     case "BT":
                         $new_title = trim($ris_part[1]);
-                        report_info("    Possible new title: " . echoable($new_title));
+                        if ($new_title) report_info("    Possible new title: " . echoable($new_title));
                         break;
                     default: // @codeCoverageIgnore
                 }
@@ -1543,7 +1552,7 @@ function expand_book_adsabs(Template $template, object $record): void {
   // Surround search terms in (url-encoded) ""s, i.e. doi:"10.1038/bla(bla)bla"
 function query_adsabs(string $options): object {
     set_time_limit(120);
-    // API docs at https://github.com/adsabs/adsabs-dev-api/blob/master/Search_API.ipynb
+    // API docs at https://github.com/adsabs/adsabs-dev-api/blob/master/API_documentation_UNIXshell/Search_API.ipynb
     if (AdsAbsControl::small_gave_up_yet()) {
         return (object) ['numFound' => 0];
     }
@@ -1569,8 +1578,7 @@ function CrossRefTitle(string $doi): string {
         $ch = bot_curl_init(1.0,
             [CURLOPT_USERAGENT => BOT_CROSSREF_USER_AGENT]);
     }
-    /** @psalm-taint-escape ssrf */
-    $url = "https://api.crossref.org/v1/works/".str_replace(DOI_URL_DECODE, DOI_URL_ENCODE, $doi)."?mailto=".CROSSREFUSERNAME; // do not encode crossref email
+    $url = "https://api.crossref.org/v1/works/".doi_encode($doi)."?mailto=".CROSSREFUSERNAME; // do not encode crossref email
     curl_setopt($ch, CURLOPT_URL, $url);
     $json = bot_curl_exec($ch);
     $json = @json_decode($json);

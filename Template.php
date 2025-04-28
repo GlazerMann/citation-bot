@@ -775,7 +775,7 @@ final class Template
       // Often the pre-print year
       $this->rename('year', 'CITATION_BOT_PLACEHOLDER_year');
      }
-     if ($this->has('doi') && doi_active($this->get('doi'))) {
+     if ($this->has('doi')) {
       expand_by_doi($this);
      }
      $this->this_array = [$this];
@@ -1219,7 +1219,7 @@ final class Template
   }
 
   // If we already have name parameters for author, don't add more
-  if ($this->initial_author_params && in_array($param_name, FLATTENED_AUTHOR_PARAMETERS, true)) {
+  if ($this->had_initial_author() && in_array($param_name, FLATTENED_AUTHOR_PARAMETERS, true)) {
    return false;
   }
 
@@ -1825,7 +1825,7 @@ final class Template
     if (stripos($value, 'Report Number ') !== false) {
      return false;
     }
-    if (!$this->blank(['booktitle', 'book-title'])) {
+    if (!$this->blank('book-title')) {
      return false;
     }
     if (in_array(strtolower(sanitize_string($value)), BAD_TITLES, true)) {
@@ -1969,7 +1969,7 @@ final class Template
    case 'contribution':
    case 'article':
    case 'section': //  We do not add article/section, but sometimes found floating in a template
-    if (!$this->blank(['booktitle', 'book-title']) && $this->has('title')) {
+    if (!$this->blank('book-title') && $this->has('title')) {
      return false;
     }
     if (!$this->blank(WORK_ALIASES) && $this->wikiname() === 'citation') {
@@ -2004,7 +2004,7 @@ final class Template
      if ($this->has('article') && ($this->wikiname() === 'cite encyclopedia' || $this->wikiname() === 'cite dictionary' || $this->wikiname() === 'cite encyclopaedia')) {
       return false;
      } // Probably the same thing
-     if (!$this->blank(['booktitle', 'book-title'])) {
+     if (!$this->blank('book-title')) {
       return false;
      } // Cite conference uses this
      if ($this->blank('script-title')) {
@@ -2312,12 +2312,12 @@ final class Template
       }
       $this->add('doi', $match[0]);
       return true;
-     } elseif (!str_i_same($this->get('doi'), $match[0]) && !$this->blank(DOI_BROKEN_ALIASES) && doi_active($match[0])) {
+     } elseif (!str_i_same($this->get('doi'), $match[0]) && !$this->blank(DOI_BROKEN_ALIASES) && doi_works($match[0])) {
       report_action("Replacing non-working DOI with a working one");
       $this->set('doi', $match[0]);
       $this->tidy_parameter('doi');
       return true;
-     } elseif (!str_i_same($this->get('doi'), $match[0]) && strpos($this->get('doi'), '10.13140/') === 0 && doi_active($match[0])) {
+     } elseif (!str_i_same($this->get('doi'), $match[0]) && strpos($this->get('doi'), '10.13140/') === 0 && doi_works($match[0])) {
       report_action("Replacing ResearchGate DOI with publisher's");
       $this->set('doi', $match[0]);
       $this->tidy_parameter('doi');
@@ -2367,6 +2367,10 @@ final class Template
       $this->quietly_forget('doi');
       return true;
      }
+    }
+    if ($this->has('jstor') && strpos($this->get('doi'), '10.1355/') === 0) {
+     $this->quietly_forget('doi');
+     return true;
     }
     // Forget any others that are blank
     foreach (array_diff(DOI_BROKEN_ALIASES, ['doi-broken-date']) as $alias) {
@@ -2566,7 +2570,7 @@ final class Template
     if (mb_strtoupper($value) === $value || mb_strtolower($value) === $value) {
      $value = title_capitalization($value, true);
     }
-    if ($value === 'Oxford University PressOxford') {
+    if ($value === 'Oxford University PressOxford' || $value === 'OUP Oxford') {
      $value = 'Oxford University Press';
     }
     if ($this->blank($param_name)) {
@@ -2682,7 +2686,7 @@ final class Template
 
  public function validate_and_add(string $author_param, string $author, string $forename, string $check_against, bool $add_even_if_existing): void
  {
-  if (!$add_even_if_existing && ($this->initial_author_params || $this->had_initial_editor)) {
+  if (!$add_even_if_existing && ($this->had_initial_author() || $this->had_initial_editor)) {
    return;
   } // Zotero does not know difference between editors and authors often
   if (
@@ -2765,7 +2769,7 @@ final class Template
    if ($this->has('quote') && strpos($this->get('quote'), $doi) !== false) {
     return;
    }
-   if (doi_active($doi)) {
+   if (doi_works($doi)) {
     $this->add_if_new('doi', $doi);
    }
   }
@@ -3164,7 +3168,29 @@ final class Template
 
   if ($result->numFound !== 1 && $this->has('title')) {
    // Do assume failure to find arXiv means that it is not there
-   $result = query_adsabs("title:" . urlencode('"' . trim(remove_brackets(str_replace(['"', "\\"], [' ', ' '], $this->get_without_comments_and_placeholders("title")))) . '"'));
+   $have_more = false;
+   $the_query = "title:" . urlencode('"' . trim(remove_brackets(str_replace(['"', "\\", "^", "_", '   ', '  '], [' ', ' ', ' ', ' ', ' ', ' '], $this->get_without_comments_and_placeholders("title")))) . '"');
+   $pages = $this->page_range();
+   if ($pages) {
+    $the_query = $the_query . "&fq=page:" . urlencode('"' . $pages[1] . '"');
+    $have_more = true;
+   }
+   if ($this->year()) {
+    $the_query = $the_query . "&fq=year:" . urlencode($this->year());
+    $have_more = true;
+   }
+   if ($this->has('volume')) {
+    $the_query = $the_query . "&fq=volume:" . urlencode('"' . $this->get('volume') . '"');
+    $have_more = true;
+   }
+   if ($this->has('issn')) {
+    $the_query = $the_query . "&fq=issn:" . urlencode($this->get('issn'));
+    $have_more = true;
+   }
+   if (!$have_more) {
+    return; // A title is not enough
+   }
+   $result = query_adsabs($the_query);
    if ($result->numFound === 0) {
     return;
    }
@@ -3254,8 +3280,7 @@ final class Template
     } // New DOI does not match
    }
 
-   if (strpos((string) $record->bibcode, 'book') !== false) {
-    // Found a book. Need special code
+   if (is_a_book_bibcode((string) $record->bibcode)) {
     $this->add_if_new('bibcode_nosearch', (string) $record->bibcode);
     expand_book_adsabs($this, $record);
     return;
@@ -3423,7 +3448,7 @@ final class Template
      $dat = trim(str_replace("\n" . $ris_line, "", "\n" . $dat));
      break;
     case "DO":
-     $ris_parameter = doi_active($ris_part[1]) ? "doi" : false;
+     $ris_parameter = doi_works($ris_part[1]) ? "doi" : false;
      break;
     case "JO":
     case "JF":
@@ -3819,6 +3844,9 @@ final class Template
   foreach (ALL_URL_TYPES as $url_type) {
    if ($this->has($url_type)) {
     $url = $this->get($url_type);
+    if (strpos($url, '#about_author_anchor') !== false) {
+     continue;
+    }
     if (preg_match('~^(https?://(?:books|www)\.google\.[^/]+/books.+)\?$~', $url, $matches)) {
      $url = $matches[1]; // trailing ?
     }
@@ -3876,7 +3904,7 @@ final class Template
  public function expand_by_google_books(): void
  {
   $this->clean_google_books();
-  if ($this->has('doi') && doi_active($this->get('doi'))) {
+  if ($this->has('doi') && doi_works($this->get('doi'))) {
    return;
   }
   foreach (['url', 'chapterurl', 'chapter-url'] as $url_type) {
@@ -3898,6 +3926,9 @@ final class Template
   if ($url_type) {
    $url = $this->get($url_type);
    if (!$url) {
+    return false;
+   }
+   if (strpos($url, '#about_author_anchor') !== false) {
     return false;
    }
    if (
@@ -3949,10 +3980,11 @@ final class Template
    if ($isbn) {
     // Try Books.Google.Com
     /** @psalm-taint-escape ssrf */
-    $google_book_url = 'https://www.google.com/search?tbo=p&tbm=bks&q=isbn:' . $isbn;
+    $google_book_url = 'https://books.google.com/books?vid=ISBN' . $isbn;
     curl_setopt($ch, CURLOPT_URL, $google_book_url);
     $google_content = bot_curl_exec($ch);
-    if ($google_content && preg_match_all('~[Bb]ooks\.[Gg]oogle\.com/books\?id=(............)&amp~', $google_content, $google_results)) {
+    $google_content = preg_replace('~book_other_versions_anchor.*$~', '', $google_content);
+    if (preg_match_all('~(?:content|html)\?id=(............)(?:&amp|")~', $google_content, $google_results)) {
      $google_results = $google_results[1];
      $google_results = array_unique($google_results);
      if (count($google_results) === 1) {
@@ -4868,11 +4900,20 @@ final class Template
  }
  public function had_initial_author(): bool
  {
-  return is_array($this->initial_author_params) && count($this->initial_author_params) > 0;
+  return count($this->initial_author_params) > 0;
  }
 
  private function join_params(): string
  {
+  $this->convert_to_vanc();
+  $ret = '';
+  foreach ($this->param as $p) {
+   $ret .= '|' . $p->parsed_text();
+  }
+  return $ret;
+ }
+
+ private function convert_to_vanc(): void {
   if (self::$name_list_style === VancStyle::NAME_LIST_STYLE_VANC && !$this->had_initial_author() && !$this->had_initial_editor) {
    $vanc_attribs = ['vauthors', 'veditors'];
    $vanc_fa = ['first', 'editor-first'];
@@ -4936,11 +4977,6 @@ final class Template
     }
    }
   }
-  $ret = '';
-  foreach ($this->param as $p) {
-   $ret .= '|' . $p->parsed_text();
-  }
-  return $ret;
  }
 
  public function change_name_to(string $new_name, bool $rename_cite_book = true, bool $rename_anything = false): void
@@ -5351,13 +5387,13 @@ final class Template
      if ($this->has('author') && $this->has('authors')) {
       $this->rename('author', 'DUPLICATE_authors');
      }
-     if (!$this->initial_author_params) {
+     if (!$this->had_initial_author()) {
       $this->handle_et_al();
      }
     // no break; Continue from authors without break
     case 'last':
     case 'surname':
-     if (!$this->initial_author_params) {
+     if (!$this->had_initial_author()) {
       if ($pmatch[2]) {
        $translator_regexp = "~\b([Tt]r(ans(lat...?(by)?)?)?\.?)\s([\w\p{L}\p{M}\s]+)$~u";
        if (preg_match($translator_regexp, trim($this->get($param)), $match)) {
@@ -5810,7 +5846,7 @@ final class Template
      }
      /** if (doi_works($doi)) { We are flagging free dois even when the do not work, since template does this right now */
      foreach (DOI_FREE_PREFIX as $prefix) {
-      if (strpos($doi, $prefix) === 0) {
+      if (stripos($doi, $prefix) === 0) {
        $this->add_if_new('doi-access', 'free');
       }
      }
@@ -6758,6 +6794,19 @@ final class Template
      }
      return;
 
+    case 'book-title':
+     if ($this->wikiname() === 'cite book') {
+      if ($this->blank('title')) {
+       $this->rename('book-title', 'title');
+      } elseif ($this->blank(CHAPTER_ALIASES)) {
+       $this->rename('title', 'chapter');
+       $this->rename('book-title', 'title');
+      } elseif (titles_are_similar($this->get('title'), $this->get('book-title'))) {
+       $this->forget('book-title');
+      }
+     }
+     return;
+
     case 'title':
      if ($this->blank($param)) {
       return;
@@ -7652,11 +7701,16 @@ final class Template
     // no break; pages, issue and year (the previous case) should be treated in this fashion.
     case 'pages':
     case 'page':
+    case 'p':
     case 'pp': // And cases 'year' and'issue' following from previous
      $value = $this->get($param);
      $value = str_replace('--', '-', $value);
      if (str_i_same('null', $value)) {
       $this->forget($param);
+      return;
+     }
+     if (str_i_same('n.p', $value)) {
+      $this->set($param, 'n.p.'); // clean up after REMOVE_PERIOD
       return;
      }
      if (strpos($value, "[//") === 0) {
@@ -7681,6 +7735,10 @@ final class Template
       $this->set($param, $value);
      }
      if (preg_match('~^p\. *(\d+)$~ui', $value, $matches)) {
+      $value = $matches[1];
+      $this->set($param, $value);
+     }
+     if (preg_match('~^pp?\. ([0-9\-\–\s\,]+)$~', $value, $matches)) {
       $value = $matches[1];
       $this->set($param, $value);
      }
@@ -8363,27 +8421,6 @@ final class Template
    if (preg_match("~[^/]*(\d{4}/.+)$~", $try, $match)) {
     $try = "10." . $match[1];
    }
-   if (doi_active($try)) {
-    $this->set('doi', $try);
-    $this->doi_valid = true;
-    foreach (DOI_BROKEN_ALIASES as $alias) {
-     $this->forget($alias);
-    }
-    if ($doi === $try) {
-     if ($chatty) {
-      report_inline('DOI ok.');
-     }
-    } else {
-     report_inline("Modified DOI:  " . echoable($try) . " is operational...");
-    }
-    return true;
-   }
-  }
-  foreach ($trial as $try) {
-   // Check that it begins with 10.
-   if (preg_match("~[^/]*(\d{4}/.+)$~", $try, $match)) {
-    $try = "10." . $match[1];
-   }
    if (doi_works($try)) {
     $this->set('doi', $try);
     $this->doi_valid = true;
@@ -8820,7 +8857,11 @@ final class Template
  }
  private function forgetter(string $par, bool $echo_forgetting): void
  {
-  if ($par === 'doi-broken-date' && $this->has('doi-broken-date') && !isset(NULL_DOI_BUT_GOOD[$this->get('doi')]) && $this->has('doi')) {
+  if ($par === 'doi-broken-date' &&
+      $this->has('doi-broken-date') &&
+      !isset(NULL_DOI_BUT_GOOD[$this->get('doi')]) &&
+      !isset(NULL_DOI_ANNOYING[$this->get('doi')]) && // Dropped for evilness
+      $this->has('doi')) {
     bot_debug_log('Thinks it fixed HDL: ' . $this->get('doi'));
   }
   // Do not call this function directly
